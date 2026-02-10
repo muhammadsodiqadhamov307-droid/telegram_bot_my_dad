@@ -1,0 +1,7 @@
+{
+  "name": "PulNazorat - Shaxsiy Moliya",
+  "description": "Telegram orqali daromad va xarajatlarni kuzatish uchun zamonaviy va sodda ilova. Ovozli xabarlarni AI yordamida qayta ishlash imkoniyati bilan.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
