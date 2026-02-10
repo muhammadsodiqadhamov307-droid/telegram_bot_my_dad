@@ -279,7 +279,7 @@ app.get('/api/report/:telegramId', async (req, res) => {
 });
 
 // SPA Fallback: Serve index.html for any unknown route (except /api)
-app.get('*', (req, res, next) => {
+app.get(/(.*)/, (req, res, next) => {
     if (req.path.startsWith('/api')) {
         return next();
     }
