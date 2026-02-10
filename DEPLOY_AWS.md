@@ -43,8 +43,8 @@ sudo npm install -g pm2
 ## 4. Deploy Code
 ```bash
 # Clone repository
-git clone https://github.com/muhammadsodiqadhamov307-droid/pulnazorat---shaxsiy-moliya.git
-cd pulnazorat---shaxsiy-moliya
+git clone https://github.com/muhammadsodiqadhamov307-droid/telegram_bot_my_dad.git
+cd telegram_bot_my_dad
 
 # Install dependencies
 npm install
