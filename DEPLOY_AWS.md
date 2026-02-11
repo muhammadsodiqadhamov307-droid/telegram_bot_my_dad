@@ -103,15 +103,90 @@ pm2 save
 pm2 startup
 ```
 
-## 7. Setup Domain & HTTPS (Optional but Recommended)
-For the Telegram Web App to work properly, you need HTTPS.
-1.  Buy a domain (or use a free one like DuckDNS).
-2.  Point the domain to your EC2 IP.
-3.  Install Nginx and Certbot:
+## 7. Get a FREE Domain & Setup HTTPS (Required for WebApp)
+
+Telegram WebApps **require** HTTPS. We will use **DuckDNS** (free) and **Nginx** (web server) to set this up.
+
+### A. Get a Free Domain (DuckDNS)
+1.  Go to [duckdns.org](https://www.duckdns.org/).
+2.  Sign in (with Google/GitHub).
+3.  In the **Sub domain** box, type a name (e.g., `my-finance-bot`) and click **add domain**.
+4.  It will create `my-finance-bot.duckdns.org`.
+5.  **Copy your Public IP** (`44.220.49.92` or whatever AWS gave you).
+6.  Paste it into the **current ip** field on DuckDNS and click **update ip**.
+
+### B. Install Nginx & Certbot on Amazon Linux 2023
+Run these commands on your server:
+
+```bash
+# 1. Install Nginx & Python dependencies
+sudo dnf install -y nginx augeas-libs python3-pip
+
+# 2. Start Nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# 3. Install Certbot (SSL Tool) using pip (Standard for AL2023)
+sudo python3 -m venv /opt/certbot/
+sudo /opt/certbot/bin/pip install --upgrade pip
+sudo /opt/certbot/bin/pip install certbot certbot-nginx
+sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
+```
+
+### C. Configure Nginx
+We need to forward traffic from the domain to your bot (port 3000).
+
+1.  Create a config file (replace `YOUR_DOMAIN` with your duckdns address, e.g., `pulnazorat.duckdns.org`):
     ```bash
-    sudo apt install -y nginx certbot python3-certbot-nginx
+    sudo nano /etc/nginx/conf.d/bot.conf
     ```
-4.  Configure Nginx Proxy (to port 3000) and run:
+    *(Note: On Amazon Linux, we use `/etc/nginx/conf.d/`)*
+
+2.  Paste this code (Right-click to paste):
+    ```nginx
+    server {
+        server_name YOUR_DOMAIN.duckdns.org;
+
+        location / {
+            proxy_pass http://localhost:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+    ```
+    *Replace `YOUR_DOMAIN.duckdns.org` with your actual domain `finance-bot-fast.duckdns.org`.*
+
+3.  Save and exit (`Ctrl+X`, `Y`, `Enter`).
+
+4.  Reload Nginx:
     ```bash
-    sudo certbot --nginx -d yourdomain.com
+    sudo nginx -t     # Test config (should say OK)
+    sudo systemctl reload nginx
+    ```
+
+### D. Enable HTTPS (SSL)
+Run this command to automatically get an SSL certificate:
+
+```bash
+sudo certbot --nginx -d YOUR_DOMAIN.duckdns.org
+```
+-   Enter your email (for renewal alerts).
+-   Agree to terms (`Y`).
+-   If asked to redirect HTTP to HTTPS, choose **2 (Redirect)**.
+
+**Success!** Your bot is now accessible at `https://YOUR_DOMAIN.duckdns.org`.
+
+### E. Final Configuration
+1.  Update `.env` in your bot folder:
+    ```bash
+    nano .env
+    ```
+    Set `WEBAPP_URL=https://YOUR_DOMAIN.duckdns.org`
+    
+2.  Restart the bot:
+    ```bash
+    pm2 restart pulnazorat
     ```
