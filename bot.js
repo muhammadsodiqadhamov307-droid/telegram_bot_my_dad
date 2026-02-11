@@ -59,7 +59,7 @@ bot.start(async (ctx) => {
         reply_markup: {
             keyboard: [
                 ['💰 Balans', '📊 Hisobotlar'],
-                [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
+                [{ text: "📱 Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
             ],
             resize_keyboard: true
         }
