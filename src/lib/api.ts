@@ -47,7 +47,10 @@ function getAuthToken(): string {
         const tgObj = !!window.Telegram;
         const webAppObj = !!window.Telegram?.WebApp;
         const initDataRaw = window.Telegram?.WebApp?.initData;
+        const unsafe = JSON.stringify(window.Telegram?.WebApp?.initDataUnsafe || {});
+
         addLog(`WARNING: No initData! Win.Tg=${tgObj}, WebApp=${webAppObj}, Raw='${initDataRaw}'`);
+        addLog(`Unsafe Data: ${unsafe}`);
 
         // Retry logic often needs to be in the component, but here we can return empty
         // The interceptor will log "Request sending without Token"
