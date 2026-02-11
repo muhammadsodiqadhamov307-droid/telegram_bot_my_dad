@@ -68,7 +68,7 @@ async function createUser(telegramId, username) {
 // --- Helper Functions ---
 async function showMainMenu(ctx, isEdit = false) {
     const user = ctx.from;
-    const text = `Salom ${user.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 **Menyudan tanlang:**`;
+    const text = `Salom ${user.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Menyudan tanlang:`;
 
     const maxRowLength = 2;
     const keyboard = {
@@ -113,7 +113,7 @@ bot.action('refresh_menu', (ctx) => showMainMenu(ctx, true));
 
 bot.command('debug', (ctx) => {
     const url = process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org';
-    ctx.reply(`🔍 **Debug Info:**\n\n🔗 WebApp URL: \`${url}\`\n🤖 Bot Token: ${process.env.BOT_TOKEN ? '✅ Set' : '❌ Missing'}\n📂 Dist Path: ${path.join(__dirname, 'dist')}`, { parse_mode: 'Markdown' });
+    ctx.reply(`🔍 Debug Info:\n\n🔗 WebApp URL: \`${url}\`\n🤖 Bot Token: ${process.env.BOT_TOKEN ? '✅ Set' : '❌ Missing'}\n📂 Dist Path: ${path.join(__dirname, 'dist')}`, { parse_mode: 'Markdown' });
 });
 
 // Handle "💰 Balans" button
@@ -131,7 +131,7 @@ async function showBalance(ctx, isEdit = false) {
         const totalExpense = expense.total || 0;
         const balance = totalIncome - totalExpense;
 
-        const text = `💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: +${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: -${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`;
+        const text = `💰 Sizning Balansingiz:\n\n🟢 Jami Kirim: +${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: -${totalExpense.toLocaleString()} so'm\n\n💵 Hozirgi Balans: ${balance.toLocaleString()} so'm`;
 
         const keyboard = {
             inline_keyboard: [[{ text: "🔙 Orqaga", callback_data: 'main_menu' }]]
@@ -153,7 +153,7 @@ bot.hears('💰 Balans', (ctx) => showBalance(ctx, false));
 bot.action('balance', (ctx) => showBalance(ctx, true));
 
 async function showReportsMenu(ctx, isEdit = false) {
-    const text = "📅 **Qaysi davr uchun hisobot kerak?**";
+    const text = "📅 Qaysi davr uchun hisobot kerak?";
     const keyboard = {
         inline_keyboard: [
             [
@@ -206,7 +206,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
 
         const balance = totalInc - totalExp;
 
-        let message = `📊 **${periodName} Hisobot**\n\n`;
+        let message = `📊 ${periodName} Hisobot\n\n`;
 
         // Add Details (Limited to last 20 to avoid message limit)
         const limit = 20;
@@ -223,7 +223,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
         message += `\n────────────────\n` +
             `🟢 Jami Kirim: +${totalInc.toLocaleString()} so'm\n` +
             `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm\n` +
-            `💵 **Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm**`;
+            `💵 Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm`;
 
         const keyboard = {
             inline_keyboard: [
@@ -785,7 +785,7 @@ bot.on('voice', async (ctx) => {
 
         pendingTransactions.set(ctx.from.id, data);
 
-        let msg = "📝 **Quyidagi bitimlarni tasdiqlaysizmi?**\n\n";
+        let msg = "📝 Quyidagi bitimlarni tasdiqlaysizmi?\n\n";
         data.forEach((item, index) => {
             const icon = item.type === 'income' ? '🟢' : '🔴';
             msg += `${index + 1}. ${icon} ${item.description}: ${item.amount.toLocaleString()} so'm\n`;
@@ -828,7 +828,8 @@ bot.action('confirm_expense', async (ctx) => {
         }
 
         pendingTransactions.delete(userId);
-        await ctx.editMessageText(`✅ **Barcha bitimlar saqlandi!**`);
+        await ctx.editMessageText(`✅ Barcha bitimlar saqlandi!`);
+        await showMainMenu(ctx);
 
     } catch (e) {
         console.error(e);
