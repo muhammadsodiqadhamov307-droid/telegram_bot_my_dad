@@ -75,7 +75,7 @@ bot.hears('💰 Balans', async (ctx) => {
         if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
 
         const income = await db.get('SELECT SUM(amount) as total FROM income WHERE user_id = ?', user.id);
-        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user.id = ?', user.id);
+        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user_id = ?', user.id);
 
         const totalIncome = income.total || 0;
         const totalExpense = expense.total || 0;
