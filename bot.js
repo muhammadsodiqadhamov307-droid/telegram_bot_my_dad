@@ -832,11 +832,9 @@ async function getReportData(db, userId, period, projectId = null) {
         projectName = "Boshqa xarajatlar";
     }
 
-    // UTC+5 Timezone Fix
+    // UTC+5 Timezone Fix (Reliable)
     const now = new Date();
-    // Add 5 hours to UTC time to get UZT
-    const uztOffset = 5 * 60 * 60 * 1000;
-    const uztDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + uztOffset);
+    const uztDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tashkent" }));
 
     const yyyy = uztDate.getFullYear();
     const mm = String(uztDate.getMonth() + 1).padStart(2, '0');
