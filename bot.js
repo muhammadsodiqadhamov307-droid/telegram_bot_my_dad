@@ -45,9 +45,73 @@ initDb().then(() => {
     console.error("❌ Database initialization failed:", err);
 });
 
-// Initialize Gemini
-const geminiApiKey = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(geminiApiKey);
+// Initialize Gemini Key Pool
+const apiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+if (apiKeys.length === 0) {
+    console.error("❌ CRITICAL ERROR: GEMINI_API_KEY is missing or empty in .env");
+}
+
+let currentKeyIndex = 0;
+
+function getNextGenAI() {
+    if (apiKeys.length === 0) throw new Error("No available Gemini API keys.");
+
+    const key = apiKeys[currentKeyIndex];
+    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+
+    // console.log(`🔄 Rotated to Key #${currentKeyIndex + 1}`); // Optional debug
+    return new GoogleGenerativeAI(key);
+}
+
+// Wrapper to handle 429 errors with Key Rotation
+async function generateContentWithRotation(prompt, buffer) {
+    let attempts = 0;
+    // Try each key at least once
+    while (attempts < apiKeys.length) {
+        try {
+            const genAI = getNextGenAI();
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Stable model
+
+            const result = await model.generateContent([
+                prompt,
+                {
+                    inlineData: {
+                        mimeType: "audio/ogg",
+                        data: buffer.toString('base64')
+                    }
+                }
+            ]);
+            return result; // Success!
+
+        } catch (error) {
+            attempts++;
+            // Check for Quota Limit (429) or Overloaded (503 sometimes)
+            if (error.status === 429 || error.message?.includes('429')) {
+                console.warn(`⚠️ Key exhausted (429). Switching to next key... (Attempt ${attempts}/${apiKeys.length})`);
+
+                // Add strict 1s delay before retry as requested
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+            } else {
+                throw error; // Rethrow other errors (like 400 Bad Request) immediately
+            }
+        }
+    }
+    throw new Error("QUOTA_EXHAUSTED_ALL_KEYS");
+}
+
+// ... inside voice handler ...
+let result;
+try {
+    result = await generateContentWithRotation(prompt, buffer);
+} catch (error) {
+    if (error.message === "QUOTA_EXHAUSTED_ALL_KEYS") {
+        console.error("ALL QUOTAS HIT: Bot is resting until tomorrow.");
+        return ctx.reply("⚠️ Botdagi barcha kalitlar limiti tugadi. Iltimos, ertaga qayta urinib ko'ring! (Google Gemini Free Tier)");
+    }
+    console.error("AI Error:", error);
+    return ctx.reply("AI xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.");
+}
 
 // Pending Transactions Cache (userId -> { amount, description })
 const pendingTransactions = new Map();
