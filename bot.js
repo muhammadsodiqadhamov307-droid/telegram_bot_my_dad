@@ -117,6 +117,16 @@ async function createUser(telegramId, username) {
     return getUser(telegramId);
 }
 
+async function ensureSalaryCategory(userId) {
+    const db = await openDb();
+    let cat = await db.get("SELECT * FROM categories WHERE user_id = ? AND name = 'Ustalar oyligi'", userId);
+    if (!cat) {
+        await db.run("INSERT INTO categories (user_id, name, type, icon, color, is_default) VALUES (?, 'Ustalar oyligi', 'expense', '👷', '#f59e0b', 1)", userId);
+        cat = await db.get("SELECT * FROM categories WHERE user_id = ? AND name = 'Ustalar oyligi'", userId);
+    }
+    return cat;
+}
+
 // --- Bot Commands ---
 // --- Helper Functions ---
 async function showMainMenu(ctx, isEdit = false) {
@@ -172,10 +182,18 @@ async function showMainMenu(ctx, isEdit = false) {
     const keyboard = { inline_keyboard: inlineKeyboard };
 
     // Persistent Keyboard for Management
+    const persistentKeyboardRows = [['➕ Obyekt Yaratish', '🗑 Obyekt O\'chirish']];
+
+    // Show 'Ustalar Oyligi' only if a specific project is selected
+    if (dbUser.current_project_id && dbUser.current_project_id !== 'ALL') {
+        const p = projects.find(p => p.id === dbUser.current_project_id);
+        if (p) {
+            persistentKeyboardRows.push(['� Ustalar Oyligi']);
+        }
+    }
+
     const persistentKeyboard = {
-        keyboard: [
-            ['➕ Obyekt Yaratish', '🗑 Obyekt O\'chirish']
-        ],
+        keyboard: persistentKeyboardRows,
         resize_keyboard: true,
         persistent: true
     };
@@ -232,6 +250,27 @@ bot.action('select_all', async (ctx) => {
 
 // Create Project Flow
 const creatingProjectUsers = new Set();
+const salaryModeUsers = new Set();
+
+
+bot.hears('👷 Ustalar Oyligi', async (ctx) => {
+    salaryModeUsers.add(ctx.from.id);
+    await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🔙 Bekor qilish", callback_data: 'cancel_salary_mode' }]
+            ]
+        }
+    });
+});
+
+bot.action('cancel_salary_mode', async (ctx) => {
+    salaryModeUsers.delete(ctx.from.id);
+    await ctx.answerCbQuery("Bekor qilindi.");
+    await showMainMenu(ctx, true);
+});
+
 bot.hears('➕ Obyekt Yaratish', async (ctx) => {
     creatingProjectUsers.add(ctx.from.id);
     await ctx.reply("Yangi obyekt nomini yozing:", {
@@ -352,6 +391,12 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
+    if (salaryModeUsers.has(userId)) {
+        if (text.startsWith('/')) return next();
+        await processSalaryInput(ctx, text, 'text');
+        return;
+    }
+
 
 
     return next();
@@ -435,6 +480,9 @@ async function sendReportSummary(ctx, period, isEdit = false) {
 
         let message = `📊 **${projectName}**\n${periodName} Hisobot\n\n`;
 
+        // Fetch Salary Category for Comparison
+        const salaryCat = await ensureSalaryCategory(userId);
+
         if (isHammasi) {
             // HAMMASI RENDERER
             const Incomes = rows.filter(r => r.type === 'income');
@@ -468,10 +516,26 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                 const pName = projectMap[pid] || "Noma'lum";
                 message += `🏗 **${pName}**:\n`;
                 let pTotal = 0;
-                tasksByProject[pid].forEach(r => {
-                    message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
-                    pTotal += r.amount;
-                });
+
+                const pExpenses = tasksByProject[pid];
+                const pSalaries = pExpenses.filter(r => r.category_id === salaryCat.id);
+                const pRegular = pExpenses.filter(r => r.category_id !== salaryCat.id);
+
+                if (pRegular.length > 0) {
+                    pRegular.forEach(r => {
+                        message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
+                        pTotal += r.amount;
+                    });
+                }
+
+                if (pSalaries.length > 0) {
+                    message += `   👷 **Ustalar Oyligi:**\n`;
+                    pSalaries.forEach(r => {
+                        message += `   🔸 ${r.description}: -${r.amount.toLocaleString()}\n`;
+                        pTotal += r.amount;
+                    });
+                }
+
                 message += `   Jami: -${pTotal.toLocaleString()}\n`;
                 message += `------------------------------------------------\n`;
             });
@@ -484,10 +548,23 @@ async function sendReportSummary(ctx, period, isEdit = false) {
 
         } else {
             // PROJECT & BOSHQA RENDERER (Expenses Only)
-            // Both Project and 'Boshqa xarajatlar' now show ONLY expenses.
-            rows.forEach(r => {
-                message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
-            });
+            const salaries = rows.filter(r => r.category_id === salaryCat.id);
+            const regular = rows.filter(r => r.category_id !== salaryCat.id);
+
+            if (regular.length > 0) {
+                message += `🛠 **Xarajatlar:**\n`;
+                regular.forEach(r => {
+                    message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
+                });
+            }
+
+            if (salaries.length > 0) {
+                message += `\n👷 **Ustalar Oyligi:**\n`;
+                salaries.forEach(r => {
+                    message += `� ${r.description}: -${r.amount.toLocaleString()}\n`;
+                });
+            }
+
             message += `\n────────────────\n` +
                 ` Jami Chiqim: -${totalExp.toLocaleString()} so'm`;
         }
@@ -555,6 +632,8 @@ async function generateExcelReport(ctx, period) {
             { width: 20 }, // Amount
             { width: 20 }  // Balance/Extra
         ];
+
+        const salaryCat = await ensureSalaryCategory(userId);
 
         // --- STYLES ---
         const styles = {
@@ -703,26 +782,36 @@ async function generateExcelReport(ctx, period) {
                 const pName = projectMap[pid] || "Noma'lum Obyekt";
                 const pRows = projectExpenses[pid];
 
+                // Project Header
                 worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
                 const secHeader = worksheet.getCell(`A${currentRow}`);
-                secHeader.value = `🏗 ${pName.toUpperCase()}`;
+                secHeader.value = `🏗 ${pName}`;
                 secHeader.style = styles.sectionHeader;
                 secHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: pid === 'null' ? 'FF64748b' : 'FF3b82f6' } };
                 currentRow++;
 
+                // Table Header
                 const hRow = worksheet.getRow(currentRow);
                 hRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', ''];
                 hRow.eachCell(c => c.style = styles.tableHeader);
                 currentRow++;
 
+                // Split Salaries
+                const pSalaries = pRows.filter(r => r.category_id === salaryCat.id);
+                const pRegular = pRows.filter(r => r.category_id !== salaryCat.id);
+
                 let secTotal = 0;
-                pRows.forEach((r, idx) => {
+
+                // Render Regular
+                pRegular.forEach((r, idx) => {
                     secTotal += r.amount;
                     const row = worksheet.getRow(currentRow);
                     row.getCell(1).value = new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                     row.getCell(1).alignment = { horizontal: 'center' };
                     row.getCell(2).value = r.description;
                     row.getCell(3).value = 'Chiqim';
+                    row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfee2e2' } };
+                    row.getCell(3).alignment = { horizontal: 'center' };
                     row.getCell(4).value = `-${r.amount.toLocaleString()}`;
                     row.getCell(4).style = styles.cellAmountExp;
 
@@ -732,6 +821,33 @@ async function generateExcelReport(ctx, period) {
                     });
                     currentRow++;
                 });
+
+                // Render Salaries
+                if (pSalaries.length > 0) {
+                    const subHeader = worksheet.getRow(currentRow);
+                    subHeader.getCell(2).value = "👷 Ustalar Oyligi";
+                    subHeader.getCell(2).font = { bold: true, color: { argb: 'FFf59e0b' } };
+                    currentRow++;
+
+                    pSalaries.forEach((r, idx) => {
+                        secTotal += r.amount;
+                        const row = worksheet.getRow(currentRow);
+                        row.getCell(1).value = new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
+                        row.getCell(1).alignment = { horizontal: 'center' };
+                        row.getCell(2).value = r.description; // Icon is already in desc? Or added by processSalaryInput? Yes added.
+                        row.getCell(3).value = 'Oylik';
+                        row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } }; // Amber light
+                        row.getCell(3).alignment = { horizontal: 'center' };
+                        row.getCell(4).value = `-${r.amount.toLocaleString()}`;
+                        row.getCell(4).style = { font: { bold: true, color: { argb: 'FFf59e0b' } }, alignment: { horizontal: 'right' } };
+
+                        if (idx % 2 === 1) row.fill = styles.listRowOdd;
+                        row.eachCell({ includeEmpty: false }, (cell) => {
+                            cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
+                        });
+                        currentRow++;
+                    });
+                }
 
                 // Section Total
                 worksheet.getCell(`C${currentRow}`).value = `Jami ${pName}:`;
@@ -745,53 +861,64 @@ async function generateExcelReport(ctx, period) {
 
         } else {
             // --- STANDARD VIEW (Single Project / Global) ---
-            const headerRow = worksheet.getRow(currentRow);
-            headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA\n(so\'m)', 'BAL.\n(so\'m)'];
-            headerRow.eachCell(c => c.style = styles.tableHeader);
-            headerRow.height = 30;
-            currentRow++;
+            const adjustedTableTop = 10;
+            worksheet.getRow(adjustedTableTop).values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', ''];
+            worksheet.getRow(adjustedTableTop).eachCell(c => c.style = styles.tableHeader);
+            currentRow = adjustedTableTop + 1;
 
-            let runningBalance = startingBalance;
             const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-            sortedRows.forEach((row, index) => {
+            const pSalaries = sortedRows.filter(r => r.category_id === salaryCat.id);
+            const pRegular = sortedRows.filter(r => r.category_id !== salaryCat.id);
+
+            // Render Regular
+            pRegular.forEach((row, idx) => {
                 const r = worksheet.getRow(currentRow);
                 const date = new Date(row.created_at);
-
-                if (row.type === 'income') runningBalance += row.amount;
-                else runningBalance -= row.amount;
 
                 r.getCell(1).value = date.toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                 r.getCell(1).alignment = { horizontal: 'center' };
                 r.getCell(2).value = row.description;
-
-                const isIncome = row.type === 'income';
-                r.getCell(3).value = isIncome ? 'Kirim' : 'Chiqim';
-                r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isIncome ? 'FFd1fae5' : 'FFfee2e2' } };
+                r.getCell(3).value = 'Chiqim';
+                r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfee2e2' } };
                 r.getCell(3).alignment = { horizontal: 'center' };
+                r.getCell(4).value = `-${row.amount.toLocaleString()}`;
+                r.getCell(4).style = styles.cellAmountExp;
 
-                r.getCell(4).value = `${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`;
-                r.getCell(4).style = isIncome ? styles.cellAmountInc : styles.cellAmountExp;
-
-                // Running Balance (Only relevant if showing Income too, which we don't for Expense Only views)
-                // Wait, if it's expense only, runningBalance is negative accumulation?
-                // Or just don't show balance col for expense only?
-                // The prompt was about Hammasi. Let's keep existing logic for this part but use new styles.
-
-                if (isHammasi) {
-                    // This block is actually unreachable here because isHammasi is handled above. 
-                    // So this Else block is for !isHammasi (Project or Global).
-                    // In these views, we only show Expenses. So Balance column is not useful.
-                    // But user might want to see how much spent total over time? 
-                    // Let's hide Balance col for Expense Only views to match PDF changes.
-                }
-
-                if (index % 2 === 1) r.fill = styles.listRowOdd;
+                if (idx % 2 === 1) r.fill = styles.listRowOdd;
                 r.eachCell({ includeEmpty: false }, (cell) => {
                     cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
                 });
                 currentRow++;
             });
+
+            // Render Salaries
+            if (pSalaries.length > 0) {
+                const subHeader = worksheet.getRow(currentRow);
+                subHeader.getCell(2).value = "👷 Ustalar Oyligi";
+                subHeader.getCell(2).font = { bold: true, color: { argb: 'FFf59e0b' } };
+                currentRow++;
+
+                pSalaries.forEach((row, idx) => {
+                    const r = worksheet.getRow(currentRow);
+                    const date = new Date(row.created_at);
+
+                    r.getCell(1).value = date.toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
+                    r.getCell(1).alignment = { horizontal: 'center' };
+                    r.getCell(2).value = row.description;
+                    r.getCell(3).value = 'Oylik';
+                    r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } }; // Amber light
+                    r.getCell(3).alignment = { horizontal: 'center' };
+                    r.getCell(4).value = `-${row.amount.toLocaleString()}`;
+                    r.getCell(4).style = { font: { bold: true, color: { argb: 'FFf59e0b' } }, alignment: { horizontal: 'right' } };
+
+                    if (idx % 2 === 1) r.fill = styles.listRowOdd;
+                    r.eachCell({ includeEmpty: false }, (cell) => {
+                        cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
+                    });
+                    currentRow++;
+                });
+            }
 
             currentRow++;
             worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
@@ -873,16 +1000,17 @@ async function getReportData(db, userId, period, projectId = null) {
     let rows = [];
 
     // QUERY LOGIC
+    // QUERY LOGIC
     if (isHammasi) {
-        const incomeRows = await db.all(`SELECT 'income' as type, amount, description, created_at, project_id FROM income WHERE user_id = ? AND ${dateFilter} ORDER BY created_at DESC`, userId);
-        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} ORDER BY created_at DESC`, userId);
+        const incomeRows = await db.all(`SELECT 'income' as type, amount, description, created_at, project_id, category_id FROM income WHERE user_id = ? AND ${dateFilter} ORDER BY created_at DESC`, userId);
+        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id, category_id FROM expenses WHERE user_id = ? AND ${dateFilter} ORDER BY created_at DESC`, userId);
         rows = [...incomeRows, ...expenseRows];
     } else if (isProject) {
-        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id = ? ORDER BY created_at DESC`, userId, projectId);
+        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id, category_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id = ? ORDER BY created_at DESC`, userId, projectId);
         rows = expenseRows;
     } else {
         // Global/Boshqa -> NOW EXPENSE ONLY
-        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
+        const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id, category_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
         rows = expenseRows;
     }
 
@@ -917,6 +1045,7 @@ async function generateProfessionalPDF(ctx, period) {
         const db = await openDb();
         const user = await getUser(userId);
         const reportData = await getReportData(db, user.id, period, user.current_project_id);
+        const salaryCat = await ensureSalaryCategory(userId);
 
         // Destructure with defaults
         const { rows = [], periodName = period, startDate = '', endDate = '', projectName } = reportData;
@@ -1043,10 +1172,27 @@ async function generateProfessionalPDF(ctx, period) {
                 const pName = projectMap[pid] || "Noma'lum";
                 doc.fillColor('#ef4444').fontSize(11).font('Helvetica-Bold').text(`🏗 ${pName}`, 40, doc.y);
                 let pTotal = 0;
-                tasksByProject[pid].forEach(r => {
-                    doc.fillColor('#475569').fontSize(10).font('Helvetica').text(`- ${r.amount.toLocaleString()} - ${r.description}`, 50, doc.y);
-                    pTotal += r.amount;
-                });
+
+                const pExpenses = tasksByProject[pid];
+                const pSalaries = pExpenses.filter(r => r.category_id === salaryCat.id);
+                const pRegular = pExpenses.filter(r => r.category_id !== salaryCat.id);
+
+                if (pRegular.length > 0) {
+                    pRegular.forEach(r => {
+                        doc.fillColor('#475569').fontSize(10).font('Helvetica').text(`- ${r.amount.toLocaleString()} - ${r.description}`, 50, doc.y);
+                        pTotal += r.amount;
+                    });
+                }
+
+                if (pSalaries.length > 0) {
+                    doc.moveDown(0.2);
+                    doc.fillColor('#f59e0b').fontSize(10).font('Helvetica-Bold').text(`👷 Ustalar Oyligi`, 50, doc.y);
+                    pSalaries.forEach(r => {
+                        doc.fillColor('#d97706').fontSize(10).font('Helvetica').text(`- ${r.amount.toLocaleString()} - ${r.description}`, 60, doc.y);
+                        pTotal += r.amount;
+                    });
+                }
+
                 doc.fillColor('#ef4444').fontSize(10).font('Helvetica-Bold').text(`Jami: -${pTotal.toLocaleString()}`, 50, doc.y);
                 doc.moveDown(0.5);
                 doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(50, doc.y).lineTo(500, doc.y).stroke();
@@ -1072,7 +1218,11 @@ async function generateProfessionalPDF(ctx, period) {
                 const amount = Number(row.amount) || 0;
                 if (row.type === 'income') runningBalance += amount; else runningBalance -= amount;
 
-                doc.fillColor('#000000').fontSize(10).font('Helvetica')
+                // Color coding for Salary vs Regular
+                let color = '#000000';
+                if (row.category_id === salaryCat.id) color = '#d97706'; // Amber for salary
+
+                doc.fillColor(color).fontSize(10).font('Helvetica')
                     .text(`${new Date(row.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" })}`, 40 + 2, currentY + 10, { width: 60, align: 'center' })
                     .text(row.description.substring(0, 40), 40 + 70, currentY + 10)
                     .text(`${row.type === 'income' ? '+' : '-'}${amount.toLocaleString()}`, 360, currentY + 10, { width: 100, align: 'right' });
@@ -1116,6 +1266,105 @@ async function generateProfessionalPDF(ctx, period) {
     }
 }
 
+
+async function processSalaryInput(ctx, input, type) {
+    try {
+        const waitingMsg = await ctx.reply("⏳ Ishchilar ro'yxati tahlil qilinmoqda...");
+
+        // Prepare Gemini Prompt
+        const prompt = `
+        Analyze this ${type} message (Uzbek language) regarding worker salaries (Ustalar oyligi).
+        Extract worker names and payment amounts.
+        
+        Return STRICT JSON ARRAY of objects:
+        [
+            { "description": "Worker Name", "amount": 100000, "type": "expense" }
+        ]
+        
+        Example User: "Ali ga 200 ming, Valiga 150 ming berdim"
+        Output: [{"description": "Ali", "amount": 200000, "type": "expense"}, {"description": "Vali", "amount": 150000, "type": "expense"}]
+        
+        Clean the description to just the name/role. Remove "ga", "uchun", etc.
+        `;
+
+        let result;
+        try {
+            // Re-use logic or call generator
+            // We need to construct the generation call. 
+            // If text, generateContent(prompt + text).
+            // If voice buffer, generateContent([prompt, inlineData]).
+
+            const genAI = getNextGenAI();
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+            if (type === 'text') {
+                result = await model.generateContent(prompt + "\nUser Input: " + input);
+            } else {
+                result = await model.generateContent([
+                    prompt,
+                    { inlineData: { mimeType: "audio/ogg", data: input.toString('base64') } }
+                ]);
+            }
+
+        } catch (error) {
+            console.error("Gemini Salary Error:", error);
+            await ctx.telegram.deleteMessage(ctx.chat.id, waitingMsg.message_id);
+            return ctx.reply("⚠️ Tahlil qilishda xatolik. Qayta urinib ko'ring.");
+        }
+
+        const text = result.response.text();
+        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        let data = JSON.parse(jsonStr);
+        if (!Array.isArray(data)) data = [data];
+
+        // Attach Category
+        const salaryCat = await ensureSalaryCategory(ctx.from.id);
+        data.forEach(item => {
+            item.categoryId = salaryCat.id;
+            item.description = `👷 ${item.description}`; // Add icon to desc
+        });
+
+        pendingTransactions.set(ctx.from.id, data);
+
+        let msg = "👷 **Oylik To'lovlarni Tasdiqlang:**\n\n";
+        let total = 0;
+        data.forEach((item, index) => {
+            msg += `${index + 1}. ${item.description}: ${item.amount.toLocaleString()} so'm\n`;
+            total += item.amount;
+        });
+        msg += `\n**JAMI:** ${total.toLocaleString()} so'm`;
+
+        await ctx.telegram.deleteMessage(ctx.chat.id, waitingMsg.message_id);
+
+        // Remove from salary mode? No, wait until confirm or cancel.
+        // Actually typical flow: confirm -> save -> exit mode. 
+        // cancel -> exit mode.
+        // But here we rely on callbacks. 
+        // We can keep them in mode or not. 
+        // Let's keep them in mode until they explicitly cancel or we finish.
+        // But `confirm_expense` deletes `pendingTransactions`. 
+        // It does NOT remove from `salaryModeUsers`. 
+        // So user stays in mode? 
+        // If user stays in mode, next text will be treated as salary.
+        // This is good for batch entry.
+        // Adding a specific "Exit" button in the prompt is good.
+
+        await ctx.reply(msg, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '✅ Tasdiqlash', callback_data: 'confirm_expense' }],
+                    [{ text: '❌ Bekor qilish', callback_data: 'cancel_expense' }] // This just clears pending
+                ]
+            }
+        });
+
+    } catch (e) {
+        console.error("Process Salary Error:", e);
+        ctx.reply("Tushunarsiz xabar. Qayta urinib ko'ring.");
+    }
+}
+
 bot.on('voice', async (ctx) => {
     try {
         const fileId = ctx.message.voice.file_id;
@@ -1127,6 +1376,11 @@ bot.on('voice', async (ctx) => {
         const response = await fetch(fileLink.href);
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+
+        if (salaryModeUsers.has(ctx.from.id)) {
+            await processSalaryInput(ctx, buffer, 'voice');
+            return;
+        }
 
         // Gemini Processing
         const prompt = `
@@ -1235,8 +1489,8 @@ bot.action('confirm_expense', async (ctx) => {
                 }
             }
 
-            await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id) VALUES (?, ?, ?, ?)`,
-                dbUser.id, item.amount, item.description, projectIdToSave
+            await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id, category_id) VALUES (?, ?, ?, ?, ?)`,
+                dbUser.id, item.amount, item.description, projectIdToSave, item.categoryId || null
             );
         }
 
