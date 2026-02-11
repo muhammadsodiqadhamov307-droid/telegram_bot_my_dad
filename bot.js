@@ -675,7 +675,10 @@ async function generateExcelReport(ctx, period) {
                     currentRow++;
                 });
 
-                worksheet.getCell(`D${currentRow}`).value = `Jami Kirim: +${secTotal.toLocaleString()}`;
+                worksheet.getCell(`C${currentRow}`).value = "Jami Kirim:";
+                worksheet.getCell(`C${currentRow}`).font = { bold: true };
+                worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `+${secTotal.toLocaleString()}`;
                 worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
                 worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
                 currentRow += 2;
