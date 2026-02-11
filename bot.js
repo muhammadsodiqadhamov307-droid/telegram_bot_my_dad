@@ -165,6 +165,14 @@ async function showMainMenu(ctx, isEdit = false) {
     });
     if (row.length > 0) inlineKeyboard.push(row);
 
+    // Show 'Ustalar Oyligi' in Inline Menu if a project is selected
+    if (dbUser.current_project_id && dbUser.current_project_id !== 'ALL') {
+        const p = projects.find(prj => prj.id === dbUser.current_project_id);
+        if (p) {
+            inlineKeyboard.push([{ text: "👷 Ustalar Oyligi", callback_data: 'salary_mode_start' }]);
+        }
+    }
+
     // 2. Global Option & Reports
     inlineKeyboard.push([
         { text: "🌐 Hammasi (Hisobot)", callback_data: 'select_all' },
@@ -263,6 +271,19 @@ bot.hears('👷 Ustalar Oyligi', async (ctx) => {
             ]
         }
     });
+});
+
+bot.action('salary_mode_start', async (ctx) => {
+    salaryModeUsers.add(ctx.from.id);
+    await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🔙 Bekor qilish", callback_data: 'cancel_salary_mode' }]
+            ]
+        }
+    });
+    await ctx.answerCbQuery();
 });
 
 bot.action('cancel_salary_mode', async (ctx) => {
