@@ -155,35 +155,34 @@ async function showMainMenu(ctx, isEdit = false) {
     inlineKeyboard.push([{ text: "🌐 Boshqa xarajatlar", callback_data: 'select_global' }]);
     inlineKeyboard.push([{ text: "📊 Hisobotlar", callback_data: 'reports_menu' }]);
 
-    // 3. Object Management (New Inline Row)
-    inlineKeyboard.push([
-        { text: "➕ Yaratish", callback_data: 'create_project_flow' },
-        { text: "🗑 O'chirish", callback_data: 'delete_project_flow' }
-    ]);
-
-    // 4. Web App
+    // 3. Web App
     inlineKeyboard.push([{ text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]);
-
-    // 5. Refresh
-    // inlineKeyboard.push([{ text: "🔄 Yangilash", callback_data: 'refresh_menu' }]); Removed as requested
 
     const keyboard = { inline_keyboard: inlineKeyboard };
 
-    // Remove Persistent Keyboard (send remove_keyboard just once if needed, or just ignore)
-    // To be clean, we can try to remove it if it exists, but usually we just stop sending it.
+    // Persistent Keyboard for Management
+    const persistentKeyboard = {
+        keyboard: [
+            ['➕ Obyekt Yaratish', '🗑 Obyekt O\'chirish']
+        ],
+        resize_keyboard: true,
+        persistent: true
+    };
 
     try {
+        // Always send persistent keyboard if it's a fresh /start or command
+        if (!isEdit) {
+            await ctx.reply("🎛", { reply_markup: persistentKeyboard });
+        }
+
         if (isEdit && ctx.callbackQuery) {
             await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         } else {
-            // Send with remove_keyboard to clear any old buttons, but we can't attach inline to it directly in one go easily without a separate msg.
-            // Actually, we can't mix remove_keyboard and inline_keyboard in one message.
-            // We will just send the inline menu. The old persistent keyboard might stay until user clears it or we send a specific spacer.
-            // Let's rely on the user having a clean state or manually clearing it.
             await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
     } catch (e) {
         console.error("Menu Error:", e);
+        // Fallback
         await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
     }
 }
@@ -191,8 +190,6 @@ async function showMainMenu(ctx, isEdit = false) {
 // --- Bot Commands ---
 bot.start(async (ctx) => {
     await createUser(ctx.from.id, ctx.from.username);
-    // Try to clear old keyboard on start
-    await ctx.reply("Yuklanmoqda...", { reply_markup: { remove_keyboard: true } }).then(m => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id));
     await showMainMenu(ctx, false);
 });
 
@@ -217,15 +214,13 @@ bot.action('select_global', async (ctx) => {
 
 // Create Project Flow
 const creatingProjectUsers = new Set();
-
-bot.action('create_project_flow', async (ctx) => {
+bot.hears('➕ Obyekt Yaratish', async (ctx) => {
     creatingProjectUsers.add(ctx.from.id);
     await ctx.reply("Yangi obyekt nomini yozing:");
-    await ctx.answerCbQuery();
 });
 
 const deletingProjectUsers = new Set();
-bot.action('delete_project_flow', async (ctx) => {
+bot.hears('🗑 Obyekt O\'chirish', async (ctx) => {
     deletingProjectUsers.add(ctx.from.id);
     const db = await openDb();
     const projects = await db.all('SELECT * FROM projects WHERE user_id = ?', ctx.from.id);
@@ -238,7 +233,6 @@ bot.action('delete_project_flow', async (ctx) => {
     let msg = "O'chirmoqchi bo'lgan obyekt nomini yozing:\n\n";
     projects.forEach(p => msg += `- ${p.name}\n`);
     await ctx.reply(msg);
-    await ctx.answerCbQuery();
 });
 
 
