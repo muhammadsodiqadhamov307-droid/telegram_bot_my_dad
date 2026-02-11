@@ -441,7 +441,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
             if (Incomes.length > 0) {
                 message += `📥 **KIRIMLAR:**\n`;
                 Incomes.forEach(r => message += `🟢 ${r.description}: +${r.amount.toLocaleString()}\n`);
-                message += `\n----------------\n`;
+                message += `\n------------------------------------------------\n`;
             }
 
             const projects = await db.all('SELECT id, name FROM projects WHERE user_id = ?', userId);
@@ -1002,12 +1002,9 @@ async function generateProfessionalPDF(ctx, period) {
         }
 
         // RENDERER
-        if (reportData.isHammasi) {
-            // Custom List Render for Hammasi
-            // ... We will skip complex table logic for Hammasi PDF for now or implement a simplified list
-            // Because table logic assumes chronological single flow. Hammasi needs segmentation.
+        let currentY = doc.y;
 
-            // Let's implement a simple segmented list for PDF "Hammasi" View
+        if (reportData.isHammasi) {
 
             doc.fontSize(12).fillColor('#000000').text("Batafsil Hisobot:", 40, doc.y);
             doc.moveDown(0.5);
@@ -1053,14 +1050,10 @@ async function generateProfessionalPDF(ctx, period) {
                 doc.moveDown(0.5);
             });
 
+            currentY = doc.y;
+
         } else {
             // Standard Table (for Project or Global)
-            // (Reusing existing table logic if simplified, but let's just stick to the text flow for now to be safe with this big replacement)
-            // Or actually, let's keep the standard table if not Hammasi.
-
-            // ... (Here I would need to paste the whole table logic again to be safe, but snippet is too long)
-            // For safety in this "replace", I will use the code that was in `view_file`.
-
             const adjustedTableTop = doc.y;
             doc.rect(40, adjustedTableTop, 515, 30).fillAndStroke('#334155', '#334155');
             doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold')
@@ -1068,7 +1061,7 @@ async function generateProfessionalPDF(ctx, period) {
                 .text('TAVSIF', 40 + 70, adjustedTableTop + 11, { width: 250 })
                 .text('SUMMA', 360, adjustedTableTop + 11, { width: 100, align: 'right' });
 
-            let currentY = adjustedTableTop + 30;
+            currentY = adjustedTableTop + 30;
             const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             let runningBalance = startingBalance;
 
