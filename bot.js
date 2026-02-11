@@ -73,6 +73,15 @@ bot.start(async (ctx) => {
             resize_keyboard: true
         }
     });
+
+    // 2. Send Inline Keyboard (Reliable WebApp Launch)
+    await ctx.reply("👇 **Ilovani ochish uchun tugmani bosing:**", {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "📱 Moliya Dashboardni Ochish", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
+            ]
+        }
+    });
 });
 
 bot.command('debug', (ctx) => {
