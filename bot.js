@@ -440,28 +440,14 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                 `🔴 Chiqim: -${totalExp.toLocaleString()}\n` +
                 `💵 Qoldiq: ${balance.toLocaleString()} so'm`;
 
-        } else if (isProject) {
-            // PROJECT RENDERER (Expenses Only)
+        } else {
+            // PROJECT & BOSHQA RENDERER (Expenses Only)
+            // Both Project and 'Boshqa xarajatlar' now show ONLY expenses.
             rows.forEach(r => {
                 message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
             });
             message += `\n────────────────\n` +
-                `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm`;
-        } else {
-            // STANDARD RENDERER
-            const limit = 20;
-            rows.slice(0, limit).forEach(row => {
-                const symbol = row.type === 'income' ? '🟢' : '🔴';
-                const sign = row.type === 'income' ? '+' : '-';
-                message += `${symbol} ${row.description}: ${sign}${row.amount.toLocaleString()} so'm\n`;
-            });
-            if (rows.length > limit) message += `... va yana ${rows.length - limit} ta (PDF da).\n`;
-
-            const balance = totalInc - totalExp;
-            message += `\n────────────────\n` +
-                `🟢 Jami Kirim: +${totalInc.toLocaleString()} so'm\n` +
-                `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm\n` +
-                `💵 Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm`;
+                ` Jami Chiqim: -${totalExp.toLocaleString()} so'm`;
         }
 
         const keyboard = {
@@ -507,7 +493,7 @@ async function generateExcelReport(ctx, period) {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
-        const { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance, projectName } = await getReportData(db, user.id, period, user.current_project_id);
+        const { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance, projectName, isHammasi } = await getReportData(db, user.id, period, user.current_project_id);
         const balance = totalInc - totalExp;
 
         const workbook = new ExcelJS.Workbook();
@@ -560,43 +546,60 @@ async function generateExcelReport(ctx, period) {
         };
 
         // Summary Cards
-        worksheet.mergeCells('A6:B6');
-        const incLabel = worksheet.getCell('A6');
-        incLabel.value = 'JAMI KIRIM';
-        incLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        incLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
-        incLabel.alignment = { horizontal: 'center' };
+        if (isHammasi) {
+            worksheet.mergeCells('A6:B6');
+            const incLabel = worksheet.getCell('A6');
+            incLabel.value = 'JAMI KIRIM';
+            incLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            incLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
+            incLabel.alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('A7:B7');
-        const incVal = worksheet.getCell('A7');
-        incVal.value = `+${totalInc.toLocaleString()} so'm`;
-        incVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        incVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
-        incVal.alignment = { horizontal: 'center' };
+            worksheet.mergeCells('A7:B7');
+            const incVal = worksheet.getCell('A7');
+            incVal.value = `+${totalInc.toLocaleString()} so'm`;
+            incVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            incVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
+            incVal.alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('C6:D6');
-        const expLabel = worksheet.getCell('C6');
-        expLabel.value = 'JAMI CHIQIM';
-        expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-        expLabel.alignment = { horizontal: 'center' };
+            worksheet.mergeCells('C6:D6');
+            const expLabel = worksheet.getCell('C6');
+            expLabel.value = 'JAMI CHIQIM';
+            expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+            expLabel.alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('C7:D7');
-        const expVal = worksheet.getCell('C7');
-        expVal.value = `-${totalExp.toLocaleString()} so'm`;
-        expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-        expVal.alignment = { horizontal: 'center' };
+            worksheet.mergeCells('C7:D7');
+            const expVal = worksheet.getCell('C7');
+            expVal.value = `-${totalExp.toLocaleString()} so'm`;
+            expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+            expVal.alignment = { horizontal: 'center' };
 
-        worksheet.getCell('E6').value = 'BALANS';
-        worksheet.getCell('E6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        worksheet.getCell('E6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-        worksheet.getCell('E6').alignment = { horizontal: 'center' };
+            worksheet.getCell('E6').value = 'BALANS';
+            worksheet.getCell('E6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            worksheet.getCell('E6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+            worksheet.getCell('E6').alignment = { horizontal: 'center' };
 
-        worksheet.getCell('E7').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
-        worksheet.getCell('E7').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        worksheet.getCell('E7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-        worksheet.getCell('E7').alignment = { horizontal: 'center' };
+            worksheet.getCell('E7').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
+            worksheet.getCell('E7').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            worksheet.getCell('E7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+            worksheet.getCell('E7').alignment = { horizontal: 'center' };
+        } else {
+            // Expense Only Summary
+            worksheet.mergeCells('C6:D6');
+            const expLabel = worksheet.getCell('C6');
+            expLabel.value = 'JAMI CHIQIM';
+            expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+            expLabel.alignment = { horizontal: 'center' };
+
+            worksheet.mergeCells('C7:D7');
+            const expVal = worksheet.getCell('C7');
+            expVal.value = `-${totalExp.toLocaleString()} so'm`;
+            expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+            expVal.alignment = { horizontal: 'center' };
+        }
 
         const headerRow = worksheet.getRow(9);
         headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA\n(so\'m)', 'BAL.\n(so\'m)'];
@@ -628,9 +631,11 @@ async function generateExcelReport(ctx, period) {
             r.getCell(4).font = { bold: true, color: { argb: isIncome ? 'FF059669' : 'FFdc2626' } };
             r.getCell(4).alignment = { horizontal: 'right' };
 
-            r.getCell(5).value = `${runningBalance.toLocaleString()} so'm`;
-            r.getCell(5).font = { bold: true, color: { argb: runningBalance >= 0 ? 'FF000000' : 'FFdc2626' } };
-            r.getCell(5).alignment = { horizontal: 'right' };
+            if (isHammasi) {
+                r.getCell(5).value = `${runningBalance.toLocaleString()} so'm`;
+                r.getCell(5).font = { bold: true, color: { argb: runningBalance >= 0 ? 'FF000000' : 'FFdc2626' } };
+                r.getCell(5).alignment = { horizontal: 'right' };
+            }
 
             if (index % 2 === 1) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } };
 
@@ -642,14 +647,18 @@ async function generateExcelReport(ctx, period) {
         });
 
         currentRow += 1;
-        worksheet.getCell(`D${currentRow}`).value = 'Jami Kirim:';
-        worksheet.getCell(`D${currentRow}`).font = { bold: true };
-        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`E${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
-        worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
-        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
 
-        currentRow++;
+        if (isHammasi) {
+            worksheet.getCell(`D${currentRow}`).value = 'Jami Kirim:';
+            worksheet.getCell(`D${currentRow}`).font = { bold: true };
+            worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+            worksheet.getCell(`E${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
+            worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
+
+            currentRow++;
+        }
+
         worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
         worksheet.getCell(`D${currentRow}`).font = { bold: true };
         worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
@@ -657,15 +666,17 @@ async function generateExcelReport(ctx, period) {
         worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
         worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
 
-        currentRow++;
-        worksheet.getCell(`D${currentRow}`).value = 'YAKUNIY BALANS:';
-        worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
-        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-        const finalBalance = startingBalance + totalInc - totalExp;
-        worksheet.getCell(`E${currentRow}`).value = `${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`;
-        worksheet.getCell(`E${currentRow}`).font = { bold: true, size: 12, color: { argb: finalBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
-        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`E${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
+        if (isHammasi) {
+            currentRow++;
+            worksheet.getCell(`D${currentRow}`).value = 'YAKUNIY BALANS:';
+            worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+            const finalBalance = startingBalance + totalInc - totalExp;
+            worksheet.getCell(`E${currentRow}`).value = `${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`;
+            worksheet.getCell(`E${currentRow}`).font = { bold: true, size: 12, color: { argb: finalBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
+            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
+            worksheet.getCell(`E${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
+        }
 
         const buffer = await workbook.xlsx.writeBuffer();
         await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
@@ -743,10 +754,9 @@ async function getReportData(db, userId, period, projectId = null) {
         const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id = ? ORDER BY created_at DESC`, userId, projectId);
         rows = expenseRows;
     } else {
-        // Global/Boshqa
-        const incomeRows = await db.all(`SELECT 'income' as type, amount, description, created_at, project_id FROM income WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
+        // Global/Boshqa -> NOW EXPENSE ONLY
         const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
-        rows = [...incomeRows, ...expenseRows];
+        rows = expenseRows;
     }
 
     // Calculate Totals within the period
@@ -754,14 +764,17 @@ async function getReportData(db, userId, period, projectId = null) {
     let totalExp = 0;
     rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
 
-    // Starting Balance Logic (Only relevant for Hammasi or Global, usually 0 for Projects if we only track expense)
+    // Starting Balance Logic (Only relevant for Hammasi)
     let startingBalance = 0;
-    if (!isProject) {
-        let startProjectFilter = "";
-        if (!isHammasi) startProjectFilter = "AND project_id IS NULL";
+    if (isHammasi) {
+        // Only Hammasi (Global Income - Global Expenses) ?? 
+        // Or All Income - All Expenses?
+        // Hammasi View shows Global Income. Boshqa View shows Global Expenses. 
+        // Balance calculation needs to be consistent. 
+        // If Hammasi view is "All my money", it should be Total Income (Global) - Total Expenses (Global + Projects).
 
-        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND ${startQueryFilter} ${startProjectFilter}`;
-        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND ${startQueryFilter} ${startProjectFilter}`;
+        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND ${startQueryFilter}`; // All income (assuming forced global)
+        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND ${startQueryFilter}`; // All expenses
         const startInc = await db.get(startIncQuery, userId);
         const startExp = await db.get(startExpQuery, userId);
         startingBalance = (startInc.total || 0) - (startExp.total || 0);
@@ -812,7 +825,7 @@ async function generateProfessionalPDF(ctx, period) {
         doc.moveDown(1.2);
 
         // 3. Summary Cards (Conditional)
-        if (!reportData.isProject) {
+        if (reportData.isHammasi) {
             const cardY = doc.y;
             const cardWidth = 160;
             const cardGap = 17;
@@ -857,7 +870,7 @@ async function generateProfessionalPDF(ctx, period) {
         const balansColumnX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount;
         const balansColumnWidth = colWidths.balance;
 
-        if (!reportData.isProject) {
+        if (reportData.isHammasi) {
             doc.roundedRect(balansColumnX, openingBalanceY, colWidths.balance, 32, 4).fillAndStroke('#f8fafc', '#e2e8f0');
             doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text("Ostatka", balansColumnX + 5, openingBalanceY + 6, { width: colWidths.balance - 10, align: 'right' });
             doc.fillColor(startingBalance >= 0 ? '#059669' : '#dc2626').fontSize(10).font('Helvetica-Bold').text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()}`, balansColumnX + 5, openingBalanceY + 18, { width: colWidths.balance - 10, align: 'right' });
