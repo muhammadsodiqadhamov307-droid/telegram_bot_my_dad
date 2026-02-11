@@ -63,18 +63,21 @@ async function initDb() {
         await db.exec("ALTER TABLE expenses ADD COLUMN category_id INTEGER REFERENCES categories(id)");
     } catch (e) { /* Column likely exists */ }
 
+    // Cleanup unwanted categories
+    await db.run("DELETE FROM categories WHERE name = 'Kafe/Restoran' AND icon = 'xxxx'");
+    await db.run("UPDATE categories SET icon = '💼' WHERE name = 'Biznes' AND icon = 'xxxx'");
+
     // Seed Default Categories
     const catCount = await db.get('SELECT COUNT(*) as count FROM categories');
     if (catCount.count === 0) {
         const defaultCats = [
             { name: 'Oylik', type: 'income', icon: '💰', color: '#10b981' },
-            { name: 'Biznes', type: 'income', icon: 'xxxx', color: '#3b82f6' },
+            { name: 'Biznes', type: 'income', icon: '💼', color: '#3b82f6' },
             { name: 'Sovg\'a', type: 'income', icon: '🎁', color: '#8b5cf6' },
             { name: 'Oziq-ovqat', type: 'expense', icon: '🛒', color: '#f59e0b' },
             { name: 'Transport', type: 'expense', icon: '🚕', color: '#ef4444' },
             { name: 'Uy-ro\'zg\'or', type: 'expense', icon: '🏠', color: '#6366f1' },
             { name: 'Kiyim-kechak', type: 'expense', icon: '👕', color: '#ec4899' },
-            { name: 'Kafe/Restoran', type: 'expense', icon: 'xxxx', color: '#f97316' },
             { name: 'Ta\'lim', type: 'expense', icon: '📚', color: '#14b8a6' },
             { name: 'Sog\'liq', type: 'expense', icon: '💊', color: '#ef4444' }
         ];
