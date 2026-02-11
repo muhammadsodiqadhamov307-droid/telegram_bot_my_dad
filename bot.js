@@ -72,7 +72,7 @@ async function generateContentWithRotation(prompt, buffer) {
             const genAI = getNextGenAI();
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // User preferred model
 
-            const result = await model.generateContent([
+            const generatePromise = model.generateContent([
                 prompt,
                 {
                     inlineData: {
@@ -81,6 +81,12 @@ async function generateContentWithRotation(prompt, buffer) {
                     }
                 }
             ]);
+
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 45000)
+            );
+
+            const result = await Promise.race([generatePromise, timeoutPromise]);
             return result; // Success!
 
         } catch (error) {
@@ -196,7 +202,7 @@ async function showMainMenu(ctx, isEdit = false) {
     if (dbUser.current_project_id && dbUser.current_project_id !== 'ALL') {
         const p = projects.find(p => p.id === dbUser.current_project_id);
         if (p) {
-                        persistentKeyboardRows.push(['👷 Ustalar Oyligi']);
+            persistentKeyboardRows.push(['👷 Ustalar Oyligi']);
         }
     }
 
@@ -1291,9 +1297,15 @@ async function generateProfessionalPDF(ctx, period) {
 }
 
 
-async function processSalaryInput(ctx, input, type) {
+async function processSalaryInput(ctx, input, type, existingMsg = null) {
     try {
-        const waitingMsg = await ctx.reply("⏳ Ishchilar ro'yxati tahlil qilinmoqda...");
+        let waitingMsg;
+        if (existingMsg) {
+            waitingMsg = existingMsg;
+            await ctx.telegram.editMessageText(ctx.chat.id, waitingMsg.message_id, null, "⏳ Ishchilar ro'yxati tahlil qilinmoqda...");
+        } else {
+            waitingMsg = await ctx.reply("⏳ Ishchilar ro'yxati tahlil qilinmoqda...");
+        }
 
         // Prepare Gemini Prompt
         const prompt = `
@@ -1402,7 +1414,7 @@ bot.on('voice', async (ctx) => {
         const buffer = Buffer.from(arrayBuffer);
 
         if (salaryModeUsers.has(ctx.from.id)) {
-            await processSalaryInput(ctx, buffer, 'voice');
+            await processSalaryInput(ctx, buffer, 'voice', processingMsg);
             return;
         }
 
