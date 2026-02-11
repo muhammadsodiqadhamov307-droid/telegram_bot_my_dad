@@ -100,18 +100,7 @@ async function generateContentWithRotation(prompt, buffer) {
     throw new Error("QUOTA_EXHAUSTED_ALL_KEYS");
 }
 
-// ... inside voice handler ...
-let result;
-try {
-    result = await generateContentWithRotation(prompt, buffer);
-} catch (error) {
-    if (error.message === "QUOTA_EXHAUSTED_ALL_KEYS") {
-        console.error("ALL QUOTAS HIT: Bot is resting until tomorrow.");
-        return ctx.reply("⚠️ Botdagi barcha kalitlar limiti tugadi. Iltimos, ertaga qayta urinib ko'ring! (Google Gemini Free Tier)");
-    }
-    console.error("AI Error:", error);
-    return ctx.reply("AI xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.");
-}
+
 
 // Pending Transactions Cache (userId -> { amount, description })
 const pendingTransactions = new Map();
@@ -799,7 +788,6 @@ bot.on('voice', async (ctx) => {
         const buffer = Buffer.from(arrayBuffer);
 
         // Gemini Processing
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // Recommended free tier model for 2026
         const prompt = `
         Analyze this voice message and extract financial transactions.
         Context: The user is speaking Uzbek.
@@ -821,21 +809,14 @@ bot.on('voice', async (ctx) => {
 
         let result;
         try {
-            result = await model.generateContent([
-                prompt,
-                {
-                    inlineData: {
-                        mimeType: "audio/ogg",
-                        data: buffer.toString('base64')
-                    }
-                }
-            ]);
+            result = await generateContentWithRotation(prompt, buffer);
         } catch (error) {
-            if (error.status === 429 || error.message?.includes('429')) {
-                console.error("QUOTA HIT: Bot is resting until tomorrow.");
-                return ctx.reply("⚠️ Botning kunlik limiti tugadi. Iltimos, ertaga qayta urinib ko'ring! (Google Gemini Free Tier)");
+            if (error.message === "QUOTA_EXHAUSTED_ALL_KEYS") {
+                console.error("ALL QUOTAS HIT: Bot is resting until tomorrow.");
+                return ctx.reply("⚠️ Botdagi barcha kalitlar limiti tugadi. Iltimos, ertaga qayta urinib ko'ring! (Google Gemini Free Tier)");
             }
-            throw error;
+            console.error("AI Error:", error);
+            return ctx.reply("AI xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.");
         }
 
         const text = result.response.text();
