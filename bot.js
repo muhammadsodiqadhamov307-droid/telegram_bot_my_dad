@@ -113,138 +113,220 @@ bot.hears('🔙 Orqaga', async (ctx) => {
 });
 
 // Report Handlers
-bot.hears('📅 Bugun', (ctx) => generateReport(ctx, 'today'));
-bot.hears('🗓 Shu hafta', (ctx) => generateReport(ctx, 'week'));
-bot.hears('📆 Shu oy', (ctx) => generateReport(ctx, 'month'));
+bot.hears('📅 Bugun', (ctx) => sendReportSummary(ctx, 'today'));
+bot.hears('🗓 Shu hafta', (ctx) => sendReportSummary(ctx, 'week'));
+bot.hears('📆 Shu oy', (ctx) => sendReportSummary(ctx, 'month'));
 
-async function generateReport(ctx, period) {
+async function sendReportSummary(ctx, period) {
     try {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
         if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
 
-        await ctx.reply("📄 PDF hisobot tayyorlanmoqda...");
-
-        let dateFilter;
-        let periodName;
-
-        const now = new Date();
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${yyyy}-${mm}-${dd}`;
-
-        if (period === 'today') {
-            dateFilter = `date(created_at, 'localtime') = '${todayStr}'`;
-            periodName = "Bugungi";
-        } else if (period === 'week') {
-            // Start of week (Monday)
-            const day = now.getDay() || 7; // Get current day number, converting Sun (0) to 7
-            if (day !== 1) now.setHours(-24 * (day - 1)); // Set to prev Monday
-            const wYYYY = now.getFullYear();
-            const wMM = String(now.getMonth() + 1).padStart(2, '0');
-            const wDD = String(now.getDate()).padStart(2, '0');
-            const weekStart = `${wYYYY}-${wMM}-${wDD}`;
-
-            dateFilter = `date(created_at, 'localtime') >= '${weekStart}'`;
-            periodName = "Haftalik";
-        } else if (period === 'month') {
-            const monthStart = `${yyyy}-${mm}-01`;
-            dateFilter = `date(created_at, 'localtime') >= '${monthStart}'`;
-            periodName = "Oylik";
-        }
-
-        const query = `
-            SELECT 'income' as type, amount, description, created_at FROM income 
-            WHERE user_id = ? AND ${dateFilter}
-            UNION ALL
-            SELECT 'expense' as type, amount, description, created_at FROM expenses 
-            WHERE user_id = ? AND ${dateFilter}
-            ORDER BY created_at DESC
-        `;
-
-        const rows = await db.all(query, user.id, user.id);
+        const { rows, totalInc, totalExp, periodName } = await getReportData(db, user.id, period);
 
         if (rows.length === 0) {
             return ctx.reply(`⚠️ ${periodName} hisobot uchun ma'lumot topilmadi.`);
         }
 
-        // Generate PDF
-        const doc = new PDFDocument({ margin: 50 });
+        const balance = totalInc - totalExp;
+
+        const message = `📊 **${periodName} Hisobot**\n\n` +
+            `🟢 Kirim: +${totalInc.toLocaleString()} so'm\n` +
+            `🔴 Chiqim: -${totalExp.toLocaleString()} so'm\n` +
+            `────────────────\n` +
+            `💵 **Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm**`;
+
+        await ctx.reply(message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '📥 PDF Yuklab olish', callback_data: `download_pdf_${period}` }]
+                ]
+            }
+        });
+
+    } catch (e) {
+        console.error("Summary Error:", e);
+        ctx.reply("Xatolik yuz berdi.");
+    }
+}
+
+bot.action(/download_pdf_(.+)/, async (ctx) => {
+    const period = ctx.match[1];
+    await ctx.answerCbQuery("📄 PDF tayyorlanmoqda...");
+    await generateProfessionalPDF(ctx, period);
+});
+
+async function getReportData(db, userId, period) {
+    let dateFilter;
+    let periodName;
+    let startDate;
+    let endDate;
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (period === 'today') {
+        dateFilter = `date(created_at, 'localtime') = '${todayStr}'`;
+        periodName = "Bugungi";
+        startDate = todayStr;
+        endDate = todayStr;
+    } else if (period === 'week') {
+        const day = now.getDay() || 7;
+        const weekStart = new Date(now);
+        weekStart.setHours(-24 * (day - 1));
+        const wYYYY = weekStart.getFullYear();
+        const wMM = String(weekStart.getMonth() + 1).padStart(2, '0');
+        const wDD = String(weekStart.getDate()).padStart(2, '0');
+        const weekStartStr = `${wYYYY}-${wMM}-${wDD}`;
+
+        dateFilter = `date(created_at, 'localtime') >= '${weekStartStr}'`;
+        periodName = "Haftalik";
+        startDate = weekStartStr;
+        endDate = todayStr;
+    } else if (period === 'month') {
+        const monthStart = `${yyyy}-${mm}-01`;
+        dateFilter = `date(created_at, 'localtime') >= '${monthStart}'`;
+        periodName = "Oylik";
+        startDate = monthStart;
+        endDate = todayStr;
+    }
+
+    const query = `
+        SELECT 'income' as type, amount, description, created_at FROM income 
+        WHERE user_id = ? AND ${dateFilter}
+        UNION ALL
+        SELECT 'expense' as type, amount, description, created_at FROM expenses 
+        WHERE user_id = ? AND ${dateFilter}
+        ORDER BY created_at DESC
+    `;
+
+    const rows = await db.all(query, userId, userId);
+
+    let totalInc = 0;
+    let totalExp = 0;
+    rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
+
+    return { rows, totalInc, totalExp, periodName, startDate, endDate };
+}
+
+
+async function generateProfessionalPDF(ctx, period) {
+    try {
+        const userId = ctx.from.id;
+        const db = await openDb();
+        const user = await getUser(userId);
+        const { rows, totalInc, totalExp, periodName, startDate, endDate } = await getReportData(db, user.id, period);
+        const balance = totalInc - totalExp;
+
+        const doc = new PDFDocument({ size: 'A4', margin: 50 });
         const buffers = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
-            await ctx.replyWithDocument({ source: pdfData, filename: `Hisobot_${period}_${userId}.pdf` });
+            await ctx.replyWithDocument({ source: pdfData, filename: `Hisobot_${period}.pdf` });
         });
 
-        // --- PDF Styling ---
+        // --- PDF DESIGN ---
 
-        // Header
-        doc.fontSize(20).text(`Moliya Hisoboti - ${periodName}`, { align: 'center' });
+        // 1. Header
+        doc.fontSize(24).font('Helvetica-Bold').fillColor('#1e293b').text('Moliya Hisoboti', { align: 'center' });
         doc.moveDown(0.5);
-        doc.fontSize(12).text(`Foydalanuvchi: ${user.username || ctx.from.first_name}`, { align: 'center' });
-        doc.text(`Sana: ${new Date().toLocaleString()}`, { align: 'center' });
+        doc.strokeColor('#cbd5e1').lineWidth(2).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
         doc.moveDown(1);
 
-        // Calculate Totals
-        let totalInc = 0;
-        let totalExp = 0;
-        rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
-        const balance = totalInc - totalExp;
+        // 2. Summary Cards
+        const cardY = doc.y;
+        const cardWidth = 150;
+        const cardHeight = 80;
+        const cardRadius = 8;
 
-        // Summary Box
-        doc.rect(50, doc.y, 500, 70).fill('#f0f0f0').stroke();
-        doc.fillColor('black');
-        let yPos = doc.y - 60;
+        // Helper to draw card
+        function drawCard(x, color, title, amount) {
+            doc.roundedRect(x, cardY, cardWidth, cardHeight, cardRadius).fillAndStroke(color, color);
+            doc.fillColor('#ffffff').fontSize(12).font('Helvetica').text(title, x, cardY + 15, { width: cardWidth, align: 'center' });
+            doc.fontSize(16).font('Helvetica-Bold').text(amount, x, cardY + 35, { width: cardWidth, align: 'center' });
+            doc.fontSize(10).font('Helvetica').text("so'm", x, cardY + 58, { width: cardWidth, align: 'center' });
+        }
 
-        doc.text("Jami Kirim:", 70, yPos);
-        doc.fillColor('green').text(`+${totalInc.toLocaleString()} so'm`, 150, yPos);
+        drawCard(50, '#10b981', 'JAMI KIRIM', `+${totalInc.toLocaleString()}`);
+        drawCard(222, '#ef4444', 'JAMI CHIQIM', `-${totalExp.toLocaleString()}`);
+        drawCard(395, '#3b82f6', 'BALANS', `${balance >= 0 ? '+' : ''}${balance.toLocaleString()}`);
 
-        doc.fillColor('black').text("Jami Chiqim:", 300, yPos);
-        doc.fillColor('red').text(`-${totalExp.toLocaleString()} so'm`, 380, yPos);
+        doc.y = cardY + cardHeight + 20;
 
-        yPos += 25;
-        doc.fillColor('black').fontSize(14).text("Sof Balans:", 200, yPos);
-        doc.fillColor(balance >= 0 ? 'blue' : 'red').text(`${balance > 0 ? '+' : ''}${balance.toLocaleString()} so'm`, 290, yPos);
+        // 3. Period & User Info
+        doc.fillColor('#64748b').fontSize(11).font('Helvetica').text(`Davr: ${startDate} - ${endDate}`, 50, doc.y);
+        doc.text(`Foydalanuvchi: ${user.username || ctx.from.first_name}`, 50, doc.y + 5);
+        doc.moveDown(2);
 
-        doc.moveDown(4);
-
-        // Transaction Table Header
+        // 4. Table Header
         const tableTop = doc.y;
-        doc.fontSize(12).fillColor('black').font('Helvetica-Bold');
-        doc.text("Sana", 50, tableTop);
-        doc.text("Tavsif", 150, tableTop);
-        doc.text("Summa", 400, tableTop, { align: 'right' });
+        doc.rect(50, tableTop, 495, 30).fillAndStroke('#334155', '#334155');
+        doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
+        doc.text('SANA', 60, tableTop + 10);
+        doc.text('TAVSIF', 160, tableTop + 10);
+        doc.text('TUR', 360, tableTop + 10);
+        doc.text('SUMMA', 450, tableTop + 10, { align: 'right', width: 80 });
 
-        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-        doc.font('Helvetica').fontSize(10);
+        let currentY = tableTop + 30;
 
-        let currentY = tableTop + 25;
-
-        // Table Rows
-        rows.forEach((row, i) => {
-            if (currentY > 700) { // New Page
+        // 5. Table Rows
+        rows.forEach((row, index) => {
+            if (currentY > 750) {
                 doc.addPage();
                 currentY = 50;
             }
 
+            const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+            doc.rect(50, currentY, 495, 35).fillAndStroke(rowColor, '#e2e8f0');
+
             const date = new Date(row.created_at).toLocaleDateString();
-            const symbol = row.type === 'income' ? '+' : '-';
-            const color = row.type === 'income' ? 'green' : 'red';
+            const isIncome = row.type === 'income';
 
-            // Striped background
-            if (i % 2 === 0) {
-                doc.rect(50, currentY - 5, 500, 20).fill('#f9f9f9');
-            }
+            // Date
+            doc.fillColor('#475569').fontSize(10).font('Helvetica').text(date, 60, currentY + 12);
 
-            doc.fillColor('black').text(date, 50, currentY);
-            doc.text(row.description.substring(0, 40), 150, currentY); // Truncate long text
-            doc.fillColor(color).text(`${symbol}${row.amount.toLocaleString()}`, 400, currentY, { align: 'right' });
+            // Description
+            doc.fillColor('#0f172a').text(row.description.substring(0, 35), 160, currentY + 12);
 
-            currentY += 20;
+            // Type Badge
+            const badgeColor = isIncome ? '#10b981' : '#ef4444';
+            doc.roundedRect(355, currentY + 8, 60, 20, 4).fillAndStroke(badgeColor, badgeColor);
+            doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold').text(isIncome ? 'Kirim' : 'Chiqim', 355, currentY + 12, { width: 60, align: 'center' });
+
+            // Amount
+            const amountColor = isIncome ? '#059669' : '#dc2626';
+            doc.fillColor(amountColor).fontSize(10).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 450, currentY + 12, { width: 80, align: 'right' });
+
+            currentY += 35;
         });
+
+        // 6. Footer Summary
+        doc.moveDown(2);
+        if (currentY > 700) { doc.addPage(); currentY = 50; }
+
+        const summaryY = currentY + 20;
+        doc.roundedRect(50, summaryY, 495, 80, 8).fillAndStroke('#f1f5f9', '#cbd5e1');
+
+        doc.fillColor('#0f172a').fontSize(11).font('Helvetica').text('Jami Kirim:', 70, summaryY + 15);
+        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 400, summaryY + 15, { align: 'right' });
+
+        doc.fillColor('#0f172a').font('Helvetica').text('Jami Chiqim:', 70, summaryY + 35);
+        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 400, summaryY + 35, { align: 'right' });
+
+        doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(70, summaryY + 55).lineTo(525, summaryY + 55).stroke();
+
+        doc.fillColor('#0f172a').fontSize(14).font('Helvetica-Bold').text('YAKUNIY BALANS:', 70, summaryY + 65);
+        doc.fillColor(balance >= 0 ? '#059669' : '#dc2626').text(`${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`, 400, summaryY + 65, { align: 'right' });
+
+        // Timestamp
+        doc.fillColor('#94a3b8').fontSize(8).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString()}`, 400, summaryY + 90, { align: 'right' });
 
         doc.end();
 
