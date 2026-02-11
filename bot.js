@@ -129,10 +129,14 @@ async function showMainMenu(ctx, isEdit = false) {
 
     let currentContextName = "Tanlanmagan";
     if (dbUser.current_project_id) {
-        const currentProject = projects.find(p => p.id === dbUser.current_project_id);
-        currentContextName = currentProject ? `🏗 ${currentProject.name}` : "Noma'lum";
+        if (dbUser.current_project_id === 'ALL') {
+            currentContextName = "🌐 Hammasi (Umumiy)";
+        } else {
+            const currentProject = projects.find(p => p.id === dbUser.current_project_id);
+            currentContextName = currentProject ? `🏗 ${currentProject.name}` : "Noma'lum";
+        }
     } else {
-        currentContextName = "🌐 Boshqa xarajatlar (Umumiy)";
+        currentContextName = "📂 Boshqa xarajatlar (Umumiy)";
     }
 
     const text = `Salom ${user.first_name}!\n\n📂 **Hozirgi Obyekt:** ${currentContextName}\n\n👇 Obyektni tanlang yoki hisobotlarni ko'ring:`;
