@@ -429,7 +429,17 @@ async function generateProfessionalPDF(ctx, period) {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
-        const { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance } = await getReportData(db, user.id, period);
+        const reportData = await getReportData(db, user.id, period);
+
+        // Destructure with defaults
+        const { rows = [], periodName = period, startDate = '', endDate = '' } = reportData;
+        let { totalInc = 0, totalExp = 0, startingBalance = 0 } = reportData;
+
+        // Ensure numbers are numbers
+        totalInc = Number(totalInc) || 0;
+        totalExp = Number(totalExp) || 0;
+        startingBalance = Number(startingBalance) || 0;
+
         const balance = totalInc - totalExp;
 
         const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
@@ -450,20 +460,17 @@ async function generateProfessionalPDF(ctx, period) {
 
         // 2. Period & User Info
         doc.fillColor('#64748b').fontSize(10).font('Helvetica').text(`Davr: ${startDate} - ${endDate}`, 40, doc.y);
-        doc.fontSize(9).text(`Foydalanuvchi: ${user.username || ctx.from.first_name}`, 40, doc.y + 3);
+        doc.fontSize(9).text(`Foydalanuvchi: ${user.username || ctx.from.first_name || 'User'}`, 40, doc.y + 3);
         doc.moveDown(0.8);
 
         // 3. STARTING BALANCE - COMPACT VERSION
-        // Ensure startingBalance is a number to prevent "undefined" errors
-        const safeStartingBalance = Number(startingBalance) || 0;
-
         doc.fillColor('#64748b')
             .fontSize(9)
             .font('Helvetica')
             .text("Boshlang'ich balans: ", 40, doc.y, { continued: true })
-            .fillColor(safeStartingBalance >= 0 ? '#059669' : '#dc2626')
+            .fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
             .font('Helvetica-Bold')
-            .text(`${safeStartingBalance >= 0 ? '+' : ''}${safeStartingBalance.toLocaleString()} so'm`);
+            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`);
 
         doc.moveDown(0.3);
         doc.strokeColor('#e5e7eb')
@@ -478,6 +485,7 @@ async function generateProfessionalPDF(ctx, period) {
         const cardY = doc.y;
         const cardWidth = 140;
         const cardHeight = 70;
+        const cardRadius = 8;
 
         function drawCard(x, color, title, amount) {
             doc.roundedRect(x, cardY, cardWidth, cardHeight, cardRadius).fillAndStroke(color, color);
@@ -535,21 +543,32 @@ async function generateProfessionalPDF(ctx, period) {
                 currentY = 50;
             }
 
-            if (row.type === 'income') runningBalance += row.amount;
-            else runningBalance -= row.amount;
+            // SAFETY: Ensure row values are valid
+            const amount = Number(row.amount) || 0;
+            const description = row.description || '';
+
+            if (row.type === 'income') runningBalance += amount;
+            else runningBalance -= amount;
 
             const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
             doc.rect(40, currentY, 460, 32).fillAndStroke(rowColor, '#e2e8f0');
 
-            const date = new Date(row.created_at);
-            const shortDate = `${date.getDate()}/${date.getMonth() + 1}`;
+            // Date Handling
+            let shortDate = '-/-';
+            try {
+                const date = new Date(row.created_at);
+                if (!isNaN(date.getTime())) {
+                    shortDate = `${date.getDate()}/${date.getMonth() + 1}`;
+                }
+            } catch (err) { }
+
             const isIncome = row.type === 'income';
 
             // Date
             doc.fillColor('#475569').fontSize(9).font('Helvetica').text(shortDate, 42, currentY + 10, { width: colWidths.date, align: 'center' });
 
             // Description
-            doc.fillColor('#0f172a').fontSize(8.5).text(row.description.substring(0, 30), 100, currentY + 10, { width: colWidths.description, ellipsis: true });
+            doc.fillColor('#0f172a').fontSize(8.5).text(description.substring(0, 30), 100, currentY + 10, { width: colWidths.description, ellipsis: true });
 
             // Type Badge
             const badgeColor = isIncome ? '#10b981' : '#ef4444';
@@ -558,7 +577,7 @@ async function generateProfessionalPDF(ctx, period) {
 
             // Amount
             const amountColor = isIncome ? '#059669' : '#dc2626';
-            doc.fillColor(amountColor).fontSize(9).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 325, currentY + 10, { width: colWidths.amount, align: 'right' });
+            doc.fillColor(amountColor).fontSize(9).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${amount.toLocaleString()}`, 325, currentY + 10, { width: colWidths.amount, align: 'right' });
 
             // Running Balance
             const balanceColor = runningBalance >= 0 ? '#0f172a' : '#dc2626';
@@ -583,6 +602,7 @@ async function generateProfessionalPDF(ctx, period) {
         doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(50, summaryY + 50).lineTo(490, summaryY + 50).stroke();
 
         doc.fillColor('#0f172a').fontSize(12).font('Helvetica-Bold').text('YAKUNIY BALANS:', 50, summaryY + 62);
+        // Recalculate final balance safely
         const finalBalance = startingBalance + totalInc - totalExp;
         doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, 320, summaryY + 62, { align: 'right' });
 
@@ -591,8 +611,8 @@ async function generateProfessionalPDF(ctx, period) {
         doc.end();
 
     } catch (e) {
-        console.error("PDF Error:", e);
-        ctx.reply("PDF yaratishda xatolik yuz berdi.");
+        console.error("PDF Error:", e); // Log real error to server console
+        ctx.reply("PDF yaratishda xatolik yuz berdi. Iltimos admin bilan bog'laning.");
     }
 }
 
