@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { openDb } from './database.js';
 import PDFDocument from 'pdfkit';
+import ExcelJS from 'exceljs';
 
 // Load environment variables
 dotenv.config();
@@ -155,7 +156,10 @@ async function sendReportSummary(ctx, period) {
             parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: '📥 PDF Yuklab olish', callback_data: `download_pdf_${period}` }]
+                    [
+                        { text: '📥 PDF Yuklab olish', callback_data: `download_pdf_${period}` },
+                        { text: '📊 Excel Yuklab olish', callback_data: `download_excel_${period}` }
+                    ]
                 ]
             }
         });
@@ -171,6 +175,172 @@ bot.action(/download_pdf_(.+)/, async (ctx) => {
     await ctx.answerCbQuery("📄 PDF tayyorlanmoqda...");
     await generateProfessionalPDF(ctx, period);
 });
+
+bot.action(/download_excel_(.+)/, async (ctx) => {
+    const period = ctx.match[1];
+    await ctx.answerCbQuery("📊 Excel tayyorlanmoqda...");
+    await generateExcelReport(ctx, period);
+});
+
+async function generateExcelReport(ctx, period) {
+    try {
+        const userId = ctx.from.id;
+        const db = await openDb();
+        const user = await getUser(userId);
+        const { rows, totalInc, totalExp, periodName, startDate, endDate } = await getReportData(db, user.id, period);
+        const balance = totalInc - totalExp;
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet(`Hisobot ${startDate}`);
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 },  // A - Date
+            { width: 40 },  // B - Description
+            { width: 15 },  // C - Type
+            { width: 20 }   // D - Amount
+        ];
+
+        // 1. Header (Row 1-3)
+        worksheet.mergeCells('A1:D1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'MOLIYA HISOBOTI';
+        titleCell.font = { bold: true, size: 18, color: { argb: 'FF1e40af' } };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFdbeafe' } };
+        worksheet.getRow(1).height = 30;
+
+        worksheet.getCell('A2').value = 'Davr:';
+        worksheet.getCell('B2').value = `${startDate} - ${endDate}`;
+        worksheet.getCell('A3').value = 'Foydalanuvchi:';
+        worksheet.getCell('B3').value = user.username || ctx.from.first_name;
+
+        // 2. Summary Cards (Row 5-6)
+        // Income
+        worksheet.mergeCells('A5:B5');
+        const incLabel = worksheet.getCell('A5');
+        incLabel.value = 'JAMI KIRIM';
+        incLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        incLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
+        incLabel.alignment = { horizontal: 'center' };
+
+        worksheet.mergeCells('A6:B6');
+        const incVal = worksheet.getCell('A6');
+        incVal.value = `+${totalInc.toLocaleString()} so'm`;
+        incVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        incVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
+        incVal.alignment = { horizontal: 'center' };
+
+        // Expense
+        worksheet.mergeCells('C5:D5');
+        const expLabel = worksheet.getCell('C5');
+        expLabel.value = 'JAMI CHIQIM';
+        expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+        expLabel.alignment = { horizontal: 'center' };
+
+        worksheet.mergeCells('C6:D6');
+        const expVal = worksheet.getCell('C6');
+        expVal.value = `-${totalExp.toLocaleString()} so'm`;
+        expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
+        expVal.alignment = { horizontal: 'center' };
+
+        // Balance (E5:F6 - extended to match request visual, but keeping to 4 cols for mobile view if possible, expanding to E/F as requested)
+        // Request visual showed E/F. Let's start Balance at Row 8 to keep it compact or put it below cards. 
+        // Request specifically asked for E5:F5.
+        // Let's add columns E and F.
+
+        worksheet.mergeCells('E5:F5');
+        const balLabel = worksheet.getCell('E5');
+        balLabel.value = 'BALANS';
+        balLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        balLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+        balLabel.alignment = { horizontal: 'center' };
+
+        worksheet.mergeCells('E6:F6');
+        const balVal = worksheet.getCell('E6');
+        balVal.value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
+        balVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        balVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+        balVal.alignment = { horizontal: 'center' };
+
+        // 3. Table Header (Row 9)
+        const headerRow = worksheet.getRow(9);
+        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA'];
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
+        headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        headerRow.height = 25;
+
+        // 4. Data Rows
+        let currentRow = 10;
+        rows.forEach((row, index) => {
+            const r = worksheet.getRow(currentRow);
+            const date = new Date(row.created_at);
+            r.getCell(1).value = date.toLocaleDateString();
+            r.getCell(2).value = row.description;
+
+            const isIncome = row.type === 'income';
+            r.getCell(3).value = isIncome ? 'Kirim' : 'Chiqim';
+            r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isIncome ? 'FFd1fae5' : 'FFfee2e2' } };
+            r.getCell(3).alignment = { horizontal: 'center' };
+
+            r.getCell(4).value = `${isIncome ? '+' : '-'}${row.amount.toLocaleString()} so'm`;
+            r.getCell(4).font = { bold: true, color: { argb: isIncome ? 'FF059669' : 'FFdc2626' } };
+            r.getCell(4).alignment = { horizontal: 'right' };
+
+            if (index % 2 === 1) {
+                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } };
+            }
+
+            // Borders
+            r.eachCell({ includeEmpty: false }, (cell) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            currentRow++;
+        });
+
+        // 5. Footer Totals
+        currentRow += 1;
+        worksheet.getCell(`C${currentRow}`).value = 'Jami Kirim:';
+        worksheet.getCell(`C${currentRow}`).font = { bold: true };
+        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`D${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
+        worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+
+        currentRow++;
+        worksheet.getCell(`C${currentRow}`).value = 'Jami Chiqim:';
+        worksheet.getCell(`C${currentRow}`).font = { bold: true };
+        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`D${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
+        worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+
+        currentRow++;
+        worksheet.getCell(`C${currentRow}`).value = 'YAKUNIY BALANS:';
+        worksheet.getCell(`C${currentRow}`).font = { bold: true, size: 12 };
+        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`D${currentRow}`).value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
+        worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12, color: { argb: balance >= 0 ? 'FF059669' : 'FFdc2626' } };
+        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`D${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
+
+    } catch (e) {
+        console.error("Excel Error:", e);
+        ctx.reply("Excel yaratishda xatolik yuz berdi.");
+    }
+}
 
 async function getReportData(db, userId, period) {
     let dateFilter;
