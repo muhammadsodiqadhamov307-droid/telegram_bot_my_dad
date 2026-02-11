@@ -136,7 +136,7 @@ async function showMainMenu(ctx, isEdit = false) {
             currentContextName = currentProject ? `🏗 ${currentProject.name}` : "Noma'lum";
         }
     } else {
-        currentContextName = "📂 Boshqa xarajatlar (Umumiy)";
+        currentContextName = "📂 Boshqa xarajatlar";
     }
 
     const text = `Salom ${user.first_name}!\n\n📂 **Hozirgi Obyekt:** ${currentContextName}\n\n👇 Obyektni tanlang yoki hisobotlarni ko'ring:`;
@@ -343,8 +343,11 @@ async function showReportsMenu(ctx, isEdit = false) {
                 { text: '🗓 Shu hafta', callback_data: 'report_week' }
             ],
             [
-                { text: '📆 Shu oy', callback_data: 'report_month' },
-                { text: '🔙 Orqaga', callback_data: 'main_menu' }
+                { text: '📆 Shu oy', callback_data: 'report_month' }
+            ],
+            [
+                { text: '🔙 Orqaga', callback_data: 'main_menu' },
+                { text: '🏠 Bosh menyu', callback_data: 'main_menu' }
             ]
         ]
     };
@@ -468,7 +471,8 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                     { text: '📊 Excel', callback_data: `download_excel_${period}` }
                 ],
                 [
-                    { text: '🔙 Orqaga', callback_data: 'reports_menu' }
+                    { text: '🔙 Orqaga', callback_data: 'reports_menu' },
+                    { text: '🏠 Bosh menyu', callback_data: 'main_menu' }
                 ]
             ]
         };
