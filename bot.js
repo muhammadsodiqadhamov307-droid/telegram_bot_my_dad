@@ -65,31 +65,51 @@ async function createUser(telegramId, username) {
 }
 
 // --- Bot Commands ---
-bot.start(async (ctx) => {
-    const user = await createUser(ctx.from.id, ctx.from.username);
+// --- Helper Functions ---
+async function showMainMenu(ctx, isEdit = false) {
+    const user = ctx.from;
+    const text = `Salom ${user.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 **Menyudan tanlang:**`;
 
-    // Clear old keyboard first to force update
-    await ctx.reply('Menu yangilanmoqda...', { reply_markup: { remove_keyboard: true } });
-
-    await ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Yoki quyidagi tugmalardan foydalaning:`, {
-        reply_markup: {
-            keyboard: [
-                ['💰 Balans', '📊 Hisobotlar'],
-                [{ text: "📱 Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
+    const maxRowLength = 2;
+    const keyboard = {
+        inline_keyboard: [
+            [
+                { text: "💰 Balans", callback_data: 'balance' },
+                { text: "📊 Hisobotlar", callback_data: 'reports_menu' }
             ],
-            resize_keyboard: true
-        }
-    });
-
-    // 2. Send Inline Keyboard (Reliable WebApp Launch)
-    await ctx.reply("👇 **Ilovani ochish uchun tugmani bosing:**", {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "📱 Moliya Dashboardni Ochish", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
+            [
+                { text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }
+            ],
+            [
+                { text: "🔄 Yangilash", callback_data: 'refresh_menu' }
             ]
+        ]
+    };
+
+    try {
+        if (isEdit && ctx.callbackQuery) {
+            await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+        } else {
+            // If checking from start, we might want to clear old keyboard if possible, 
+            // but we can't easily mixed inline and remove_keyboard. 
+            // We just send the new inline menu.
+            await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
-    });
+    } catch (e) {
+        console.error("Menu Error:", e);
+        // Fallback if edit fails (e.g. message too old)
+        await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    }
+}
+
+// --- Bot Commands ---
+bot.start(async (ctx) => {
+    await createUser(ctx.from.id, ctx.from.username);
+    await showMainMenu(ctx, false);
 });
+
+bot.action('main_menu', (ctx) => showMainMenu(ctx, true));
+bot.action('refresh_menu', (ctx) => showMainMenu(ctx, true));
 
 bot.command('debug', (ctx) => {
     const url = process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org';
@@ -97,7 +117,7 @@ bot.command('debug', (ctx) => {
 });
 
 // Handle "💰 Balans" button
-bot.hears('💰 Balans', async (ctx) => {
+async function showBalance(ctx, isEdit = false) {
     try {
         const userId = ctx.from.id;
         const db = await openDb();
@@ -111,44 +131,67 @@ bot.hears('💰 Balans', async (ctx) => {
         const totalExpense = expense.total || 0;
         const balance = totalIncome - totalExpense;
 
-        await ctx.reply(`💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: ${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: ${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`, { parse_mode: 'Markdown' });
+        const text = `💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: +${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: -${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`;
+
+        const keyboard = {
+            inline_keyboard: [[{ text: "🔙 Orqaga", callback_data: 'main_menu' }]]
+        };
+
+        if (isEdit && ctx.callbackQuery) {
+            await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+        } else {
+            await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+        }
     } catch (e) {
         console.error(e);
         ctx.reply("Xatolik yuz berdi.");
     }
-});
+}
+
+// Handle "💰 Balans" button (Legacy Text & New Action)
+bot.hears('💰 Balans', (ctx) => showBalance(ctx, false));
+bot.action('balance', (ctx) => showBalance(ctx, true));
+
+async function showReportsMenu(ctx, isEdit = false) {
+    const text = "📅 **Qaysi davr uchun hisobot kerak?**";
+    const keyboard = {
+        inline_keyboard: [
+            [
+                { text: '📅 Bugun', callback_data: 'report_today' },
+                { text: '🗓 Shu hafta', callback_data: 'report_week' }
+            ],
+            [
+                { text: '📆 Shu oy', callback_data: 'report_month' },
+                { text: '🔙 Orqaga', callback_data: 'main_menu' }
+            ]
+        ]
+    };
+
+    if (isEdit && ctx.callbackQuery) {
+        await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    } else {
+        await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    }
+}
 
 // Handle "📊 Hisobotlar" Menu
-bot.hears('📊 Hisobotlar', async (ctx) => {
-    await ctx.reply("📅 Qaysi davr uchun hisobot kerak?", {
-        reply_markup: {
-            keyboard: [
-                ['📅 Bugun', '🗓 Shu hafta'],
-                ['📆 Shu oy', '🔙 Orqaga']
-            ],
-            resize_keyboard: true
-        }
-    });
-});
+bot.hears('📊 Hisobotlar', (ctx) => showReportsMenu(ctx, false));
+bot.action('reports_menu', (ctx) => showReportsMenu(ctx, true));
 
-bot.hears('🔙 Orqaga', async (ctx) => {
-    await ctx.reply("🏠 Bosh menyu:", {
-        reply_markup: {
-            keyboard: [
-                ['💰 Balans', '📊 Hisobotlar'],
-                [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
-            ],
-            resize_keyboard: true
-        }
-    });
-});
+// Handle Back Button (Legacy)
+bot.hears('🔙 Orqaga', (ctx) => showMainMenu(ctx, false));
 
-// Report Handlers
+// Report Handlers (Legacy & Inline)
 bot.hears('📅 Bugun', (ctx) => sendReportSummary(ctx, 'today'));
-bot.hears('🗓 Shu hafta', (ctx) => sendReportSummary(ctx, 'week'));
-bot.hears('📆 Shu oy', (ctx) => sendReportSummary(ctx, 'month'));
+bot.action('report_today', (ctx) => sendReportSummary(ctx, 'today', true));
 
-async function sendReportSummary(ctx, period) {
+bot.hears('🗓 Shu hafta', (ctx) => sendReportSummary(ctx, 'week'));
+bot.action('report_week', (ctx) => sendReportSummary(ctx, 'week', true));
+
+bot.hears('📆 Shu oy', (ctx) => sendReportSummary(ctx, 'month'));
+bot.action('report_month', (ctx) => sendReportSummary(ctx, 'month', true));
+
+async function sendReportSummary(ctx, period, isEdit = false) {
     try {
         const userId = ctx.from.id;
         const db = await openDb();
@@ -182,17 +225,23 @@ async function sendReportSummary(ctx, period) {
             `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm\n` +
             `💵 **Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm**`;
 
-        await ctx.reply(message, {
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '📥 PDF', callback_data: `download_pdf_${period}` },
-                        { text: '📊 Excel', callback_data: `download_excel_${period}` }
-                    ]
+        const keyboard = {
+            inline_keyboard: [
+                [
+                    { text: '📥 PDF', callback_data: `download_pdf_${period}` },
+                    { text: '📊 Excel', callback_data: `download_excel_${period}` }
+                ],
+                [
+                    { text: '🔙 Orqaga', callback_data: 'reports_menu' }
                 ]
-            }
-        });
+            ]
+        };
+
+        if (isEdit && ctx.callbackQuery) {
+            await ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+        } else {
+            await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+        }
 
     } catch (e) {
         console.error("Summary Error:", e);
