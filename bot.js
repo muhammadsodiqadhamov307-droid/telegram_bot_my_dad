@@ -738,13 +738,18 @@ bot.on('voice', async (ctx) => {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // Recommended free tier model for 2026
         const prompt = `
         Analyze this voice message and extract financial transactions.
-        Context: The user is speaking Uzbek.
+        Context: The user is speaking Uzbek. The audio might have background noise; focus ONLY on the main speaker's voice and ignore others.
         
         Identify multiple transactions if present.
         For each transaction determine:
         1. "type": is it "income" (kirim, oldim, tushdi, oylik) or "expense" (chiqim, ishlatdim, ketdi, harajat)?
-        2. "amount": the numeric value nicely formatted (integers).
-        3. "description": short summary of what it is.
+        2. "amount": the numeric value (integer).
+        3. "description": TRANSCRIBE EXACTLY what the user said for the item.
+           - DO NOT guess or categorize. 
+           - Example: If user says "sep", description must be "sep". 
+           - Example: If user says "non", description must be "non".
+           - DO NOT expand "sep" to "Telefon to'lovi" unless explicitly said.
+           - If no description is said, use "Noma'lum".
 
         Return STRICT JSON ARRAY like this:
         [
