@@ -5,9 +5,20 @@ import { openDb } from './database.js';
 const router = express.Router();
 
 // Middleware: Verify Telegram WebApp InitData
+// Middleware: Verify Telegram WebApp InitData
 const verifyInitData = async (req, res, next) => {
     const authHeader = req.headers.authorization;
+
+    // DEBUG BYPASS: Allow access if using BOT_TOKEN directly or a special debug flag
+    // This helps in testing if the issue is strictly initData validation
+    if (authHeader === `Bearer ${process.env.BOT_TOKEN}`) {
+        console.log("⚠️ DEBUG AUTH USED");
+        req.user = { id: 7204780521, first_name: "Debug", username: "debug_user" }; // Replace with your real ID if known
+        return next();
+    }
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.log("Auth failed: Missing header");
         return res.status(401).json({ detail: "Not authenticated" });
     }
 
@@ -28,15 +39,18 @@ const verifyInitData = async (req, res, next) => {
         const dataCheckString = dataCheckArr.join('\n');
 
         const botToken = process.env.BOT_TOKEN;
-        if (!botToken) throw new Error("BOT_TOKEN missing");
+        if (!botToken) {
+            console.error("CRITICAL: BOT_TOKEN is missing in .env");
+            throw new Error("BOT_TOKEN missing");
+        }
 
         // HMAC-SHA256 Signature Validation
         const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
         const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
         if (calculatedHash !== hash) {
-            console.error("Hash mismatch!");
-            return res.status(403).json({ detail: "Invalid authentication" });
+            console.error(`Hash mismatch! \nCalc: ${calculatedHash}\nRecv: ${hash}\nBotToken: ${botToken.substring(0, 5)}...`);
+            return res.status(403).json({ detail: "Invalid authentication Hash Mismatch" });
         }
 
         // Parse user data
@@ -47,7 +61,7 @@ const verifyInitData = async (req, res, next) => {
 
     } catch (e) {
         console.error("Auth Error:", e);
-        return res.status(403).json({ detail: "Authentication failed" });
+        return res.status(403).json({ detail: `Authentication failed: ${e.message}` });
     }
 };
 
