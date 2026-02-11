@@ -132,10 +132,23 @@ async function sendReportSummary(ctx, period) {
 
         const balance = totalInc - totalExp;
 
-        const message = `📊 **${periodName} Hisobot**\n\n` +
-            `🟢 Kirim: +${totalInc.toLocaleString()} so'm\n` +
-            `🔴 Chiqim: -${totalExp.toLocaleString()} so'm\n` +
-            `────────────────\n` +
+        let message = `📊 **${periodName} Hisobot**\n\n`;
+
+        // Add Details (Limited to last 20 to avoid message limit)
+        const limit = 20;
+        rows.slice(0, limit).forEach(row => {
+            const symbol = row.type === 'income' ? '🟢' : '🔴';
+            const sign = row.type === 'income' ? '+' : '-';
+            message += `${symbol} ${row.description}: ${sign}${row.amount.toLocaleString()} so'm\n`;
+        });
+
+        if (rows.length > limit) {
+            message += `... va yana ${rows.length - limit} ta bitim (PDF da to'liq).\n`;
+        }
+
+        message += `\n────────────────\n` +
+            `🟢 Jami Kirim: +${totalInc.toLocaleString()} so'm\n` +
+            `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm\n` +
             `💵 **Balans: ${(balance > 0 ? '+' : '')}${balance.toLocaleString()} so'm**`;
 
         await ctx.reply(message, {
