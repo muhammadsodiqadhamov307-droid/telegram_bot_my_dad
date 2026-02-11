@@ -473,7 +473,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                     pTotal += r.amount;
                 });
                 message += `   Jami: -${pTotal.toLocaleString()}\n`;
-                message += `----------------\n`;
+                message += `------------------------------------------------\n`;
             });
 
             const balance = totalInc - totalExp;
