@@ -3,7 +3,7 @@ import { Telegraf, Markup } from 'telegraf';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // CORRECT IMPORT for newer SDK
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, 'dist'))); // Serve frontend
 // Initialize Bot
 const botAccessToken = process.env.BOT_TOKEN;
 if (!botAccessToken) {
-    console.error("❌ CRTICAL ERROR: BOT_TOKEN is missing in .env");
+    console.error("❌ CRITICAL ERROR: BOT_TOKEN is missing in .env");
     process.exit(1);
 }
 const bot = new Telegraf(botAccessToken);
@@ -54,10 +54,10 @@ async function createUser(telegramId, username) {
 // --- Bot Commands ---
 bot.start(async (ctx) => {
     const user = await createUser(ctx.from.id, ctx.from.username);
-    ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Yoki quyidagi tugmalardan foydalaning:`, {
+    await ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Yoki quyidagi tugmalardan foydalaning:`, {
         reply_markup: {
             keyboard: [
-                ['💰 Balans', '📅 Bugungi hisobot'],
+                ['💰 Balans', '📊 Hisobotlar'],
                 [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
             ],
             resize_keyboard: true
@@ -80,55 +80,179 @@ bot.hears('💰 Balans', async (ctx) => {
         const totalExpense = expense.total || 0;
         const balance = totalIncome - totalExpense;
 
-        ctx.reply(`💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: ${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: ${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`, { parse_mode: 'Markdown' });
+        await ctx.reply(`💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: ${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: ${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`, { parse_mode: 'Markdown' });
     } catch (e) {
         console.error(e);
         ctx.reply("Xatolik yuz berdi.");
     }
 });
 
-// Handle "📅 Bugungi hisobot" button
-bot.hears('📅 Bugungi hisobot', async (ctx) => {
+// Handle "📊 Hisobotlar" Menu
+bot.hears('📊 Hisobotlar', async (ctx) => {
+    await ctx.reply("📅 Qaysi davr uchun hisobot kerak?", {
+        reply_markup: {
+            keyboard: [
+                ['📅 Bugun', '🗓 Shu hafta'],
+                ['📆 Shu oy', '🔙 Orqaga']
+            ],
+            resize_keyboard: true
+        }
+    });
+});
+
+bot.hears('🔙 Orqaga', async (ctx) => {
+    await ctx.reply("🏠 Bosh menyu:", {
+        reply_markup: {
+            keyboard: [
+                ['💰 Balans', '📊 Hisobotlar'],
+                [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
+            ],
+            resize_keyboard: true
+        }
+    });
+});
+
+// Report Handlers
+bot.hears('📅 Bugun', (ctx) => generateReport(ctx, 'today'));
+bot.hears('🗓 Shu hafta', (ctx) => generateReport(ctx, 'week'));
+bot.hears('📆 Shu oy', (ctx) => generateReport(ctx, 'month'));
+
+async function generateReport(ctx, period) {
     try {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
         if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
 
-        const rows = await db.all(`
-            SELECT 'income' as type, amount, description, created_at FROM income 
-            WHERE user_id = ? AND date(created_at, 'localtime') = date('now', 'localtime')
-            UNION ALL
-            SELECT 'expense' as type, amount, description, created_at FROM expenses 
-            WHERE user_id = ? AND date(created_at, 'localtime') = date('now', 'localtime')
-            ORDER BY created_at DESC
-        `, user.id, user.id);
+        await ctx.reply("📄 PDF hisobot tayyorlanmoqda...");
 
-        if (rows.length === 0) {
-            return ctx.reply("📅 Bugun hech qanday bitim amalga oshirilmadi.");
+        let dateFilter;
+        let periodName;
+
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+
+        if (period === 'today') {
+            dateFilter = `date(created_at, 'localtime') = '${todayStr}'`;
+            periodName = "Bugungi";
+        } else if (period === 'week') {
+            // Start of week (Monday)
+            const day = now.getDay() || 7; // Get current day number, converting Sun (0) to 7
+            if (day !== 1) now.setHours(-24 * (day - 1)); // Set to prev Monday
+            const wYYYY = now.getFullYear();
+            const wMM = String(now.getMonth() + 1).padStart(2, '0');
+            const wDD = String(now.getDate()).padStart(2, '0');
+            const weekStart = `${wYYYY}-${wMM}-${wDD}`;
+
+            dateFilter = `date(created_at, 'localtime') >= '${weekStart}'`;
+            periodName = "Haftalik";
+        } else if (period === 'month') {
+            const monthStart = `${yyyy}-${mm}-01`;
+            dateFilter = `date(created_at, 'localtime') >= '${monthStart}'`;
+            periodName = "Oylik";
         }
 
-        let message = "📅 **Bugungi Hisobot:**\n\n";
-        let totalInc = 0;
-        let totalExp = 0;
+        const query = `
+            SELECT 'income' as type, amount, description, created_at FROM income 
+            WHERE user_id = ? AND ${dateFilter}
+            UNION ALL
+            SELECT 'expense' as type, amount, description, created_at FROM expenses 
+            WHERE user_id = ? AND ${dateFilter}
+            ORDER BY created_at DESC
+        `;
 
-        rows.forEach(row => {
-            const symbol = row.type === 'income' ? '🟢' : '🔴';
-            const sign = row.type === 'income' ? '+' : '-';
-            if (row.type === 'income') totalInc += row.amount;
-            else totalExp += row.amount;
+        const rows = await db.all(query, user.id, user.id);
 
-            message += `${symbol} ${row.description}: ${sign}${row.amount.toLocaleString()} so'm\n`;
+        if (rows.length === 0) {
+            return ctx.reply(`⚠️ ${periodName} hisobot uchun ma'lumot topilmadi.`);
+        }
+
+        // Generate PDF
+        const doc = new PDFDocument({ margin: 50 });
+        const buffers = [];
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', async () => {
+            const pdfData = Buffer.concat(buffers);
+            await ctx.replyWithDocument({ source: pdfData, filename: `Hisobot_${period}_${userId}.pdf` });
         });
 
-        message += `\n----------------\n🟢 Kirim: +${totalInc.toLocaleString()}\n🔴 Chiqim: -${totalExp.toLocaleString()}\n💵 Farq: ${(totalInc - totalExp).toLocaleString()}`;
+        // --- PDF Styling ---
 
-        ctx.reply(message, { parse_mode: 'Markdown' });
+        // Header
+        doc.fontSize(20).text(`Moliya Hisoboti - ${periodName}`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fontSize(12).text(`Foydalanuvchi: ${user.username || ctx.from.first_name}`, { align: 'center' });
+        doc.text(`Sana: ${new Date().toLocaleString()}`, { align: 'center' });
+        doc.moveDown(1);
+
+        // Calculate Totals
+        let totalInc = 0;
+        let totalExp = 0;
+        rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
+        const balance = totalInc - totalExp;
+
+        // Summary Box
+        doc.rect(50, doc.y, 500, 70).fill('#f0f0f0').stroke();
+        doc.fillColor('black');
+        let yPos = doc.y - 60;
+
+        doc.text("Jami Kirim:", 70, yPos);
+        doc.fillColor('green').text(`+${totalInc.toLocaleString()} so'm`, 150, yPos);
+
+        doc.fillColor('black').text("Jami Chiqim:", 300, yPos);
+        doc.fillColor('red').text(`-${totalExp.toLocaleString()} so'm`, 380, yPos);
+
+        yPos += 25;
+        doc.fillColor('black').fontSize(14).text("Sof Balans:", 200, yPos);
+        doc.fillColor(balance >= 0 ? 'blue' : 'red').text(`${balance > 0 ? '+' : ''}${balance.toLocaleString()} so'm`, 290, yPos);
+
+        doc.moveDown(4);
+
+        // Transaction Table Header
+        const tableTop = doc.y;
+        doc.fontSize(12).fillColor('black').font('Helvetica-Bold');
+        doc.text("Sana", 50, tableTop);
+        doc.text("Tavsif", 150, tableTop);
+        doc.text("Summa", 400, tableTop, { align: 'right' });
+
+        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+        doc.font('Helvetica').fontSize(10);
+
+        let currentY = tableTop + 25;
+
+        // Table Rows
+        rows.forEach((row, i) => {
+            if (currentY > 700) { // New Page
+                doc.addPage();
+                currentY = 50;
+            }
+
+            const date = new Date(row.created_at).toLocaleDateString();
+            const symbol = row.type === 'income' ? '+' : '-';
+            const color = row.type === 'income' ? 'green' : 'red';
+
+            // Striped background
+            if (i % 2 === 0) {
+                doc.rect(50, currentY - 5, 500, 20).fill('#f9f9f9');
+            }
+
+            doc.fillColor('black').text(date, 50, currentY);
+            doc.text(row.description.substring(0, 40), 150, currentY); // Truncate long text
+            doc.fillColor(color).text(`${symbol}${row.amount.toLocaleString()}`, 400, currentY, { align: 'right' });
+
+            currentY += 20;
+        });
+
+        doc.end();
+
     } catch (e) {
-        console.error(e);
-        ctx.reply("Xatolik yuz berdi.");
+        console.error("PDF Error:", e);
+        ctx.reply("PDF yaratishda xatolik yuz berdi.");
     }
-});
+}
 
 bot.on('voice', async (ctx) => {
     try {
@@ -251,41 +375,26 @@ bot.action('cancel_expense', async (ctx) => {
 });
 
 // --- API Endpoints for Web App ---
-
-// Get User Data (Balance, Income, Expense total)
 app.get('/api/user/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
         const db = await openDb();
         const user = await getUser(telegramId);
-
         if (!user) return res.status(404).json({ error: 'User not found' });
-
         const income = await db.get('SELECT SUM(amount) as total FROM income WHERE user_id = ?', user.id);
         const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user_id = ?', user.id);
-
-        const totalIncome = income.total || 0;
-        const totalExpense = expense.total || 0;
-        const balance = totalIncome - totalExpense;
-
-        res.json({ balance, totalIncome, totalExpense });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Server error' });
-    }
+        res.json({ balance: (income.total || 0) - (expense.total || 0), totalIncome: income.total || 0, totalExpense: expense.total || 0 });
+    } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-// Add Income
 app.post('/api/income', async (req, res) => {
     try {
         const { telegramId, amount, description } = req.body;
         const db = await openDb();
         let user = await getUser(telegramId);
         if (!user) {
-            // In a real app, we might want to ensure creation, but here assuming user started bot
             return res.status(404).json({ error: 'User not found, please start bot first' });
         }
-
         await db.run('INSERT INTO income (user_id, amount, description) VALUES (?, ?, ?)', user.id, amount, description);
         res.json({ success: true });
     } catch (e) {
@@ -294,86 +403,20 @@ app.post('/api/income', async (req, res) => {
     }
 });
 
-// Get History (Limit 10)
 app.get('/api/history/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
         const db = await openDb();
         const user = await getUser(telegramId);
         if (!user) return res.json([]);
-
         const history = await db.all(`
             SELECT 'income' as type, amount, description, created_at FROM income WHERE user_id = ?
             UNION ALL
             SELECT 'expense' as type, amount, description, created_at FROM expenses WHERE user_id = ?
             ORDER BY created_at DESC LIMIT 10
         `, user.id, user.id);
-
         res.json(history);
-    } catch (e) {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Generate PDF Report
-app.get('/api/report/:telegramId', async (req, res) => {
-    try {
-        const { telegramId } = req.params;
-        const db = await openDb();
-        const user = await getUser(telegramId);
-
-        if (!user) return res.status(404).json({ error: 'User not found' });
-
-        // Fetch all data for report
-        const rows = await db.all(`
-            SELECT 'income' as type, amount, description, created_at FROM income WHERE user_id = ?
-            UNION ALL
-            SELECT 'expense' as type, amount, description, created_at FROM expenses WHERE user_id = ?
-            ORDER BY created_at DESC
-        `, user.id, user.id);
-
-        const doc = new PDFDocument();
-        const filename = `report_${telegramId}_${Date.now()}.pdf`;
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-
-        doc.pipe(res);
-
-        // PDF Content
-        doc.fontSize(20).text('Moliya Hisoboti', { align: 'center' });
-        doc.moveDown();
-        doc.fontSize(12).text(`Foydalanuvchi: ${user.username || telegramId}`);
-        doc.text(`Sana: ${new Date().toLocaleDateString()}`);
-        doc.moveDown();
-
-        let totalInc = 0;
-        let totalExp = 0;
-
-        rows.forEach(row => {
-            const date = new Date(row.created_at).toLocaleDateString();
-            const symbol = row.type === 'income' ? '+' : '-';
-            const color = row.type === 'income' ? 'green' : 'red';
-
-            if (row.type === 'income') totalInc += row.amount;
-            else totalExp += row.amount;
-
-            doc.fillColor(color)
-                .text(`${date} | ${row.description}: ${symbol}${row.amount.toLocaleString()} so'm`);
-        });
-
-        doc.moveDown();
-        doc.fillColor('black').text('--------------------------------');
-        doc.text(`Jami Daromad: ${totalInc.toLocaleString()} so'm`);
-        doc.text(`Jami Xarajat: ${totalExp.toLocaleString()} so'm`);
-        doc.text(`Balans: ${(totalInc - totalExp).toLocaleString()} so'm`, { active: true }); // Bold?
-
-        doc.end();
-
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'PDF generation failed' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
 // SPA Fallback: Serve index.html for any unknown route (except /api)
@@ -389,48 +432,19 @@ app.get(/(.*)/, (req, res, next) => {
     try {
         const db = await openDb();
         await db.migrate({ force: 'last' }).catch(async () => {
-            // Basic migration workaround if full migration fails or is not set up
+            // Basic migration workaround
             await db.exec(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    telegram_id BIGINT UNIQUE,
-                    username TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS income (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    amount DECIMAL(10,2),
-                    description TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                );
-                CREATE TABLE IF NOT EXISTS expenses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    amount DECIMAL(10,2),
-                    description TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                );
+                CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id BIGINT UNIQUE, username TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+                CREATE TABLE IF NOT EXISTS income (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount DECIMAL(10,2), description TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id));
+                CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount DECIMAL(10,2), description TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id));
             `);
         });
 
-        app.listen(port, () => {
-            console.log(`Server running on port ${port}`);
-        });
-
-        bot.launch().then(() => {
-            console.log('Bot started');
-        }).catch((err) => {
-            console.error('Bot launch failed:', err);
-        });
-    } catch (e) {
-        console.error("Startup error:", e);
-    }
+        app.listen(port, () => console.log(`Server running on port ${port}`));
+        bot.launch().then(() => console.log('Bot started')).catch((err) => console.error('Bot launch failed:', err));
+    } catch (e) { console.error("Startup error:", e); }
 })();
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
