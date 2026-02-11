@@ -17,26 +17,52 @@ This guide explains how to deploy the PulNazorat bot to an Amazon EC2 instance.
 ## 2. Connect to Server
 Open your terminal (or PowerShell) where the `.pem` key is located:
 ```bash
-# Secure the key
-chmod 400 pulnazorat-key.pem
+# Secure the key (Linux/Mac/Git Bash)
+chmod 400 new_bot.pem
 
-# Connect (replace 1.2.3.4 with your EC2 Public IP)
-ssh -i "pulnazorat-key.pem" ubuntu@1.2.3.4
+# Secure the key (Windows CMD/PowerShell)
+icacls new_bot.pem /reset
+icacls new_bot.pem /grant:r "%USERNAME%":"(R)"
+icacls new_bot.pem /inheritance:r
+
+# Connect (Method 1: Terminal)
+ssh -i "new_bot.pem" ubuntu@1.2.3.4
+# (If that fails with "Permission denied", double check permissions or try Method 2)
+
+## 2a. Connect (Method 2: Browser - EASIEST)
+1.  Go to AWS Console -> EC2 -> Instances.
+2.  Select your instance `PulNazorat-Server`.
+3.  Click **Connect** (top right).
+4.  Select **EC2 Instance Connect** tab.
+5.  Click **Connect**.
+This opens a terminal directly in your browser without needing key files.
 ```
 
-## 3. Server Setup
-Run these commands on the server:
+## 3. Server Setup (Amazon Linux 2023 / 2)
+Run these commands one by one:
 
 ```bash
 # Update system
+sudo yum update -y
+
+# Install Git
+sudo yum install git -y
+
+# Install Node.js (using NVM)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+
+# Install Process Manager (PM2)
+npm install -g pm2
+```
+
+## 3b. Server Setup (Ubuntu - Optional if you use Ubuntu AMI)
+```bash
 sudo apt update && sudo apt upgrade -y
-
-# Install Node.js (v20)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install Git and Process Manager (PM2)
-sudo apt install -y git
+sudo apt install -y nodejs git
 sudo npm install -g pm2
 ```
 

@@ -20,10 +20,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
+import apiRoutes from './api_routes.js';
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for audio data
 app.use(express.static(path.join(__dirname, 'dist'))); // Serve frontend
+
+// Mount API Routes
+app.use('/api', apiRoutes);
 
 // Initialize Bot
 const botAccessToken = process.env.BOT_TOKEN;
