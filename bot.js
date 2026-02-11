@@ -767,60 +767,18 @@ bot.action('cancel_expense', async (ctx) => {
     await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
-// --- API Endpoints for Web App ---
-app.get('/api/user/:telegramId', async (req, res) => {
-    try {
-        const { telegramId } = req.params;
-        const db = await openDb();
-        const user = await getUser(telegramId);
-        if (!user) return res.status(404).json({ error: 'User not found' });
-        const income = await db.get('SELECT SUM(amount) as total FROM income WHERE user_id = ?', user.id);
-        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user_id = ?', user.id);
-        res.json({ balance: (income.total || 0) - (expense.total || 0), totalIncome: income.total || 0, totalExpense: expense.total || 0 });
-    } catch (e) { res.status(500).json({ error: 'Server error' }); }
+// --- Start Server & Bot ---
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
 });
 
-app.post('/api/income', async (req, res) => {
-    try {
-        const { telegramId, amount, description } = req.body;
-        const db = await openDb();
-        let user = await getUser(telegramId);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found, please start bot first' });
-        }
-        await db.run('INSERT INTO income (user_id, amount, description) VALUES (?, ?, ?)', user.id, amount, description);
-        res.json({ success: true });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Server error' });
-    }
+bot.launch().then(() => {
+    console.log('Bot started');
 });
 
-app.get('/api/history/:telegramId', async (req, res) => {
-    try {
-        const { telegramId } = req.params;
-        const db = await openDb();
-        const user = await getUser(telegramId);
-        if (!user) return res.json([]);
-        const history = await db.all(`
-            SELECT 'income' as type, amount, description, created_at FROM income WHERE user_id = ?
-            UNION ALL
-            SELECT 'expense' as type, amount, description, created_at FROM expenses WHERE user_id = ?
-            ORDER BY created_at DESC LIMIT 10
-        `, user.id, user.id);
-        res.json(history);
-    } catch (e) { res.status(500).json({ error: 'Server error' }); }
-});
-
-// SPA Fallback: Serve index.html for any unknown route (except /api)
-app.get(/(.*)/, (req, res, next) => {
-    if (req.path.startsWith('/api')) {
-        return next();
-    }
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-// Start Server & Bot
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
 (async () => {
     try {
         const db = await openDb();
