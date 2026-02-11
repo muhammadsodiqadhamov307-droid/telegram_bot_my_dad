@@ -485,10 +485,10 @@ async function generateProfessionalPDF(ctx, period) {
         // 4. Opening Balance - Above Balans Column
         const openingBalanceY = doc.y;
 
-        // Position it above the Balans column (which starts at x=422)
-        // The Balans column width is 95pt, starting at x position after Summa
-        const balansColumnX = 422;
-        const balansColumnWidth = 98;
+        // Calculate exact Balans column position
+        // Columns: Date(40+55) + Description(160) + Type(55) + Amount(95) = 405
+        const balansColumnX = 40 + 55 + 160 + 55 + 95; // = 405
+        const balansColumnWidth = 95;
 
         doc.fillColor('#64748b')
             .fontSize(7.5)
