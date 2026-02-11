@@ -864,9 +864,9 @@ async function generateExcelReport(ctx, period) {
                         const row = worksheet.getRow(currentRow);
                         row.getCell(1).value = new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                         row.getCell(1).alignment = { horizontal: 'center' };
-                        row.getCell(2).value = r.description; // Icon is already in desc? Or added by processSalaryInput? Yes added.
+                        row.getCell(2).value = r.description;
                         row.getCell(3).value = 'Oylik';
-                        row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } }; // Amber light
+                        row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
                         row.getCell(3).alignment = { horizontal: 'center' };
                         row.getCell(4).value = `-${r.amount.toLocaleString()}`;
                         row.getCell(4).style = { font: { bold: true, color: { argb: 'FFf59e0b' } }, alignment: { horizontal: 'right' } };
@@ -877,6 +877,30 @@ async function generateExcelReport(ctx, period) {
                         });
                         currentRow++;
                     });
+                }
+
+                // --- SUB-TOTALS ---
+                const totalMaterials = pRegular.reduce((sum, r) => sum + r.amount, 0);
+                const totalSalaries = pSalaries.reduce((sum, r) => sum + r.amount, 0);
+
+                if (pRegular.length > 0) {
+                    worksheet.getCell(`C${currentRow}`).value = "Jami Materiallar:";
+                    worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FF64748b' } }; // Slate 500
+                    worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                    worksheet.getCell(`D${currentRow}`).value = `-${totalMaterials.toLocaleString()}`;
+                    worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+                    worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                    currentRow++;
+                }
+
+                if (pSalaries.length > 0) {
+                    worksheet.getCell(`C${currentRow}`).value = "Jami Ustalar Oyligi:";
+                    worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FFd97706' } }; // Amber 600
+                    worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                    worksheet.getCell(`D${currentRow}`).value = `-${totalSalaries.toLocaleString()}`;
+                    worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFd97706' } };
+                    worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                    currentRow++;
                 }
 
                 // Section Total
@@ -948,6 +972,30 @@ async function generateExcelReport(ctx, period) {
                     });
                     currentRow++;
                 });
+            }
+
+            // --- SUB-TOTALS ---
+            const totalMaterials = pRegular.reduce((sum, r) => sum + r.amount, 0);
+            const totalSalaries = pSalaries.reduce((sum, r) => sum + r.amount, 0);
+
+            if (pRegular.length > 0) {
+                worksheet.getCell(`C${currentRow}`).value = "Jami Materiallar:";
+                worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FF64748b' } }; // Slate 500
+                worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `-${totalMaterials.toLocaleString()}`;
+                worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                currentRow++;
+            }
+
+            if (pSalaries.length > 0) {
+                worksheet.getCell(`C${currentRow}`).value = "Jami Ustalar Oyligi:";
+                worksheet.getCell(`C${currentRow}`).font = { bold: true, color: { argb: 'FFd97706' } }; // Amber 600
+                worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `-${totalSalaries.toLocaleString()}`;
+                worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFd97706' } };
+                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                currentRow++;
             }
 
             currentRow++;
