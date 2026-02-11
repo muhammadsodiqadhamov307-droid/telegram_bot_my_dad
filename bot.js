@@ -450,42 +450,59 @@ async function generateProfessionalPDF(ctx, period) {
 
         // 4. Table Header
         const tableTop = doc.y;
-        doc.rect(50, tableTop, 495, 30).fillAndStroke('#334155', '#334155');
+        doc.rect(50, tableTop, 545, 30).fillAndStroke('#334155', '#334155'); // Wider table
         doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
-        doc.text('SANA', 60, tableTop + 10);
-        doc.text('TAVSIF', 160, tableTop + 10);
-        doc.text('TUR', 360, tableTop + 10);
-        doc.text('SUMMA', 450, tableTop + 10, { align: 'right', width: 80 });
+
+        doc.text('SANA', 55, tableTop + 10, { width: 70 });
+        doc.text('TAVSIF', 130, tableTop + 10, { width: 170 });
+        doc.text('TUR', 305, tableTop + 10, { width: 70, align: 'center' });
+        doc.text('SUMMA', 380, tableTop + 10, { width: 115, align: 'right' });
+        doc.text('JORIY BALANS', 500, tableTop + 10, { width: 90, align: 'right' });
 
         let currentY = tableTop + 30;
 
         // 5. Table Rows
-        rows.forEach((row, index) => {
+        // Sort Chronologically for Running Balance
+        const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        let runningBalance = 0;
+
+        sortedRows.forEach((row, index) => {
             if (currentY > 750) {
                 doc.addPage();
                 currentY = 50;
             }
 
+            // Calculate Running Balance
+            if (row.type === 'income') {
+                runningBalance += row.amount;
+            } else {
+                runningBalance -= row.amount;
+            }
+
             const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-            doc.rect(50, currentY, 495, 35).fillAndStroke(rowColor, '#e2e8f0');
+            doc.rect(50, currentY, 545, 35).fillAndStroke(rowColor, '#e2e8f0');
 
             const date = new Date(row.created_at).toLocaleDateString();
             const isIncome = row.type === 'income';
 
             // Date
-            doc.fillColor('#475569').fontSize(10).font('Helvetica').text(date, 60, currentY + 12);
+            doc.fillColor('#475569').fontSize(10).font('Helvetica').text(date, 55, currentY + 12, { width: 70 });
 
             // Description
-            doc.fillColor('#0f172a').text(row.description.substring(0, 35), 160, currentY + 12);
+            doc.fillColor('#0f172a').text(row.description.substring(0, 30), 130, currentY + 12, { width: 170, ellipsis: true });
 
             // Type Badge
             const badgeColor = isIncome ? '#10b981' : '#ef4444';
-            doc.roundedRect(355, currentY + 8, 60, 20, 4).fillAndStroke(badgeColor, badgeColor);
-            doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold').text(isIncome ? 'Kirim' : 'Chiqim', 355, currentY + 12, { width: 60, align: 'center' });
+            doc.roundedRect(315, currentY + 8, 60, 20, 4).fillAndStroke(badgeColor, badgeColor);
+            doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold').text(isIncome ? 'Kirim' : 'Chiqim', 315, currentY + 12, { width: 60, align: 'center' });
 
             // Amount
             const amountColor = isIncome ? '#059669' : '#dc2626';
-            doc.fillColor(amountColor).fontSize(10).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 450, currentY + 12, { width: 80, align: 'right' });
+            doc.fillColor(amountColor).fontSize(10).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 380, currentY + 12, { width: 115, align: 'right' });
+
+            // Running Balance
+            const balanceColor = runningBalance >= 0 ? '#0f172a' : '#dc2626';
+            doc.fillColor(balanceColor).fontSize(10).font('Helvetica-Bold').text(runningBalance.toLocaleString(), 500, currentY + 12, { width: 90, align: 'right' });
 
             currentY += 35;
         });
@@ -495,21 +512,20 @@ async function generateProfessionalPDF(ctx, period) {
         if (currentY > 700) { doc.addPage(); currentY = 50; }
 
         const summaryY = currentY + 20;
-        doc.roundedRect(50, summaryY, 495, 80, 8).fillAndStroke('#f1f5f9', '#cbd5e1');
+        doc.roundedRect(50, summaryY, 545, 80, 8).fillAndStroke('#f1f5f9', '#cbd5e1'); // Wider box
 
         doc.fillColor('#0f172a').fontSize(11).font('Helvetica').text('Jami Kirim:', 70, summaryY + 15);
-        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 400, summaryY + 15, { align: 'right' });
+        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 450, summaryY + 15, { align: 'right' });
 
         doc.fillColor('#0f172a').font('Helvetica').text('Jami Chiqim:', 70, summaryY + 35);
-        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 400, summaryY + 35, { align: 'right' });
+        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 450, summaryY + 35, { align: 'right' });
 
-        doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(70, summaryY + 55).lineTo(525, summaryY + 55).stroke();
+        doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(70, summaryY + 55).lineTo(570, summaryY + 55).stroke();
 
         doc.fillColor('#0f172a').fontSize(14).font('Helvetica-Bold').text('YAKUNIY BALANS:', 70, summaryY + 65);
-        doc.fillColor(balance >= 0 ? '#059669' : '#dc2626').text(`${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`, 400, summaryY + 65, { align: 'right' });
+        doc.fillColor(balance >= 0 ? '#059669' : '#dc2626').text(`${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`, 450, summaryY + 65, { align: 'right' });
 
-        // Timestamp
-        doc.fillColor('#94a3b8').fontSize(8).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString()}`, 400, summaryY + 90, { align: 'right' });
+        doc.fillColor('#94a3b8').fontSize(8).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString()}`, 450, summaryY + 90, { align: 'right' });
 
         doc.end();
 
