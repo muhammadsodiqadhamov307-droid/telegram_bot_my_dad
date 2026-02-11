@@ -505,28 +505,31 @@ async function generateProfessionalPDF(ctx, period) {
         };
         // Total: 60+190+55+105+105 = 515pt
 
-        // 4. Opening Balance - "Ostatka" (Simplified)
+        // 4. Opening Balance - "Ostatka" (Boxed Layout)
         const openingBalanceY = doc.y;
-        const balansColumnX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount; // 40 + 60 + 190 + 55 + 105 = 450
-        const balansColumnWidth = colWidths.balance; // 105
+        const balansColumnX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount;
+        const balansColumnWidth = colWidths.balance;
+
+        // Draw light background for Ostatka
+        doc.roundedRect(balansColumnX, openingBalanceY, balansColumnWidth, 32, 4).fillAndStroke('#f8fafc', '#e2e8f0');
 
         doc.fillColor('#64748b')
             .fontSize(8)
             .font('Helvetica-Bold')
-            .text("Ostatka", balansColumnX, openingBalanceY + 18, { // Aligned to bottom of where logic was
-                width: balansColumnWidth,
+            .text("Ostatka", balansColumnX + 5, openingBalanceY + 6, {
+                width: balansColumnWidth - 10,
                 align: 'right'
             });
 
         doc.fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
             .fontSize(10)
             .font('Helvetica-Bold')
-            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()}`, balansColumnX, openingBalanceY + 28, {
-                width: balansColumnWidth,
+            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()}`, balansColumnX + 5, openingBalanceY + 18, {
+                width: balansColumnWidth - 10,
                 align: 'right'
             });
 
-        doc.moveDown(3.0); // More space
+        doc.moveDown(3.5); // More space
         const adjustedTableTop = doc.y;
 
         // Total width: 515pt (Fits well within A4 margins)
@@ -542,14 +545,15 @@ async function generateProfessionalPDF(ctx, period) {
         const summaX = 40 + colWidths.date + colWidths.description + colWidths.type;
         doc.text('SUMMA', summaX, adjustedTableTop + 7, { width: colWidths.amount, align: 'right' })
             .fontSize(8)
-            .text('(so\'m)', summaX, adjustedTableTop + 17, { width: colWidths.amount, align: 'right' }); // BAL. column with (so'm)
+            .text('(so\'m)', summaX, adjustedTableTop + 17, { width: colWidths.amount, align: 'right' });
+
         const balColX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount;
         doc.fontSize(9.5)
-            .text('BALANS', balColX, tableTop + 7, { width: colWidths.balance, align: 'right' })
+            .text('BALANS', balColX, adjustedTableTop + 7, { width: colWidths.balance, align: 'right' })
             .fontSize(8)
-            .text('(so\'m)', balColX, tableTop + 17, { width: colWidths.balance, align: 'right' });
+            .text('(so\'m)', balColX, adjustedTableTop + 17, { width: colWidths.balance, align: 'right' });
 
-        let currentY = tableTop + 30;
+        let currentY = adjustedTableTop + 30;
 
         // 6. Table Rows
         const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
