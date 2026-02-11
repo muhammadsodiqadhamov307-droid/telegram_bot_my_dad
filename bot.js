@@ -542,15 +542,14 @@ async function generateProfessionalPDF(ctx, period) {
         const summaX = 40 + colWidths.date + colWidths.description + colWidths.type;
         doc.text('SUMMA', summaX, adjustedTableTop + 7, { width: colWidths.amount, align: 'right' })
             .fontSize(8)
-            .text('(so\'m)', summaX, adjustedTableTop + 17, { width: colWidths.amount, align: 'right' });
-
-        const balX = summaX + colWidths.amount;
+            .text('(so\'m)', summaX, adjustedTableTop + 17, { width: colWidths.amount, align: 'right' }); // BAL. column with (so'm)
+        const balColX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount;
         doc.fontSize(9.5)
-            .text('BALANS', balX, adjustedTableTop + 7, { width: colWidths.balance, align: 'right' })
+            .text('BALANS', balColX, tableTop + 7, { width: colWidths.balance, align: 'right' })
             .fontSize(8)
-            .text('(so\'m)', balX, adjustedTableTop + 17, { width: colWidths.balance, align: 'right' });
+            .text('(so\'m)', balColX, tableTop + 17, { width: colWidths.balance, align: 'right' });
 
-        let currentY = adjustedTableTop + 30;
+        let currentY = tableTop + 30;
 
         // 6. Table Rows
         const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -600,7 +599,7 @@ async function generateProfessionalPDF(ctx, period) {
 
             // Running Balance - Aligned with BAL. column
             const balanceColor = runningBalance >= 0 ? '#0f172a' : '#dc2626';
-            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), balX, currentY + 10, { width: colWidths.balance, align: 'right' });
+            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), balColX, currentY + 10, { width: colWidths.balance, align: 'right' });
 
             currentY += 32;
         });
@@ -612,18 +611,22 @@ async function generateProfessionalPDF(ctx, period) {
         const summaryY = currentY + 20;
         doc.roundedRect(40, summaryY, 515, 90, 8).fillAndStroke('#f1f5f9', '#cbd5e1');
 
+        // Align footer values to the right effectively (using box width 200, positioned at x=345, ending at 545)
+        const footerValueWidth = 200;
+        const footerValueX = 345;
+
         doc.fillColor('#0f172a').fontSize(10).font('Helvetica').text('Jami Kirim:', 50, summaryY + 12);
-        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 545, summaryY + 12, { align: 'right' });
+        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, footerValueX, summaryY + 12, { width: footerValueWidth, align: 'right' });
 
         doc.fillColor('#0f172a').font('Helvetica').text('Jami Chiqim:', 50, summaryY + 30);
-        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 545, summaryY + 30, { align: 'right' });
+        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, footerValueX, summaryY + 30, { width: footerValueWidth, align: 'right' });
 
         doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(50, summaryY + 50).lineTo(545, summaryY + 50).stroke();
 
         doc.fillColor('#0f172a').fontSize(12).font('Helvetica-Bold').text('YAKUNIY BALANS:', 50, summaryY + 62);
         // Recalculate final balance safely
-        const finalBalance = startingBalance + totalInc - totalExp;
-        doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, 545, summaryY + 62, { align: 'right' });
+        const finalBalance = totalInc - totalExp;
+        doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, footerValueX, summaryY + 62, { width: footerValueWidth, align: 'right' });
 
         doc.fillColor('#94a3b8').fontSize(7).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString('uz-UZ')}`, 350, 780, { align: 'right' });
 
