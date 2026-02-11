@@ -461,27 +461,9 @@ async function generateProfessionalPDF(ctx, period) {
         // 2. Period & User Info
         doc.fillColor('#64748b').fontSize(10).font('Helvetica').text(`Davr: ${startDate} - ${endDate}`, 40, doc.y);
         doc.fontSize(9).text(`Foydalanuvchi: ${user.username || ctx.from.first_name || 'User'}`, 40, doc.y + 3);
-        doc.moveDown(0.8);
+        doc.moveDown(1.2);
 
-        // 3. STARTING BALANCE - COMPACT VERSION
-        doc.fillColor('#64748b')
-            .fontSize(9)
-            .font('Helvetica')
-            .text("Boshlang'ich balans: ", 40, doc.y, { continued: true })
-            .fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
-            .font('Helvetica-Bold')
-            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`);
-
-        doc.moveDown(0.3);
-        doc.strokeColor('#e5e7eb')
-            .lineWidth(1)
-            .moveTo(40, doc.y)
-            .lineTo(500, doc.y)
-            .stroke();
-
-        doc.moveDown(0.8);
-
-        // 4. Summary Cards (Smaller)
+        // 3. Summary Cards (Smaller)
         const cardY = doc.y;
         const cardWidth = 140;
         const cardHeight = 70;
@@ -499,6 +481,40 @@ async function generateProfessionalPDF(ctx, period) {
         drawCard(360, '#3b82f6', 'BALANS', `${balance >= 0 ? '+' : ''}${balance.toLocaleString()}`);
 
         doc.y = cardY + cardHeight + 25;
+
+        // 4. Opening Balance - Above Balans Column
+        const openingBalanceY = doc.y;
+
+        // Position it above the Balans column (which starts at x=422)
+        // The Balans column width is 95pt, starting at x position after Summa
+        const balansColumnX = 422;
+        const balansColumnWidth = 98;
+
+        doc.fillColor('#64748b')
+            .fontSize(7.5)
+            .font('Helvetica')
+            .text("Boshlang'ich balans", balansColumnX, openingBalanceY, {
+                width: balansColumnWidth,
+                align: 'right'
+            });
+
+        doc.fillColor('#94a3b8')
+            .fontSize(6.5)
+            .font('Helvetica-Oblique')
+            .text("(oldingi kundan qolgan)", balansColumnX, openingBalanceY + 9, {
+                width: balansColumnWidth,
+                align: 'right'
+            });
+
+        doc.fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()}`, balansColumnX, openingBalanceY + 18, {
+                width: balansColumnWidth,
+                align: 'right'
+            });
+
+        doc.moveDown(2.2);
 
         // 5. Table Header - OPTIMIZED WIDTHS & HEADERS
         const tableTop = doc.y;
