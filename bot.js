@@ -454,13 +454,16 @@ async function generateProfessionalPDF(ctx, period) {
         doc.moveDown(0.8);
 
         // 3. STARTING BALANCE - COMPACT VERSION
+        // Ensure startingBalance is a number to prevent "undefined" errors
+        const safeStartingBalance = Number(startingBalance) || 0;
+
         doc.fillColor('#64748b')
             .fontSize(9)
             .font('Helvetica')
             .text("Boshlang'ich balans: ", 40, doc.y, { continued: true })
-            .fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
+            .fillColor(safeStartingBalance >= 0 ? '#059669' : '#dc2626')
             .font('Helvetica-Bold')
-            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`);
+            .text(`${safeStartingBalance >= 0 ? '+' : ''}${safeStartingBalance.toLocaleString()} so'm`);
 
         doc.moveDown(0.3);
         doc.strokeColor('#e5e7eb')
