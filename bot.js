@@ -181,7 +181,7 @@ async function showMainMenu(ctx, isEdit = false) {
 
     // 2. Global Option & Reports
     inlineKeyboard.push([
-        { text: "🌐 Hammasi (Hisobot)", callback_data: 'select_all' },
+        { text: "🌐 Hammasi", callback_data: 'select_all' },
         { text: "📂 Boshqa xarajatlar", callback_data: 'select_global' }
     ]);
     inlineKeyboard.push([{ text: "📊 Hisobotlar", callback_data: 'reports_menu' }]);
