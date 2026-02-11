@@ -70,7 +70,7 @@ async function generateContentWithRotation(prompt, buffer) {
     while (attempts < apiKeys.length) {
         try {
             const genAI = getNextGenAI();
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Stable model
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // User preferred model
 
             const result = await model.generateContent([
                 prompt,
