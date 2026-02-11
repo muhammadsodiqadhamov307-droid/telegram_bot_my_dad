@@ -367,7 +367,8 @@ async function sendReportSummary(ctx, period, isEdit = false) {
         const { rows, totalInc, totalExp, periodName, projectName } = await getReportData(db, user.id, period, user.current_project_id);
 
         if (rows.length === 0) {
-            return ctx.reply(`⚠️ ${periodName} hisobot uchun ma'lumot topilmadi.`);
+            await ctx.reply(`⚠️ **${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`, { parse_mode: 'Markdown' });
+            return showMainMenu(ctx);
         }
 
         const balance = totalInc - totalExp;
