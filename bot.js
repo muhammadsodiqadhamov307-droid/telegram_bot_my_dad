@@ -491,9 +491,9 @@ async function generateProfessionalPDF(ctx, period) {
         const balansColumnWidth = 95;
 
         doc.fillColor('#64748b')
-            .fontSize(7.5)
-            .font('Helvetica')
-            .text("Boshlang'ich balans", balansColumnX, openingBalanceY, {
+            .fontSize(8)
+            .font('Helvetica-Bold')
+            .text("Ostatka", balansColumnX, openingBalanceY, {
                 width: balansColumnWidth,
                 align: 'right'
             });
@@ -542,10 +542,11 @@ async function generateProfessionalPDF(ctx, period) {
             .text('(so\'m)', 325, tableTop + 17, { width: colWidths.amount, align: 'right' });
 
         // BAL. column with (so'm) - ABBREVIATED
+        const balColX = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount; // = 405
         doc.fontSize(9.5)
-            .text('BAL.', 425, tableTop + 7, { width: colWidths.balance, align: 'right' })
+            .text('BAL.', balColX, tableTop + 7, { width: colWidths.balance, align: 'right' })
             .fontSize(8)
-            .text('(so\'m)', 425, tableTop + 17, { width: colWidths.balance, align: 'right' });
+            .text('(so\'m)', balColX, tableTop + 17, { width: colWidths.balance, align: 'right' });
 
         let currentY = tableTop + 30;
 
@@ -595,9 +596,10 @@ async function generateProfessionalPDF(ctx, period) {
             const amountColor = isIncome ? '#059669' : '#dc2626';
             doc.fillColor(amountColor).fontSize(9).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${amount.toLocaleString()}`, 325, currentY + 10, { width: colWidths.amount, align: 'right' });
 
-            // Running Balance
+            // Running Balance - Aligned with BAL. column
+            const balanceXPos = 40 + colWidths.date + colWidths.description + colWidths.type + colWidths.amount;
             const balanceColor = runningBalance >= 0 ? '#0f172a' : '#dc2626';
-            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), 425, currentY + 10, { width: colWidths.balance, align: 'right' });
+            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), balanceXPos, currentY + 10, { width: colWidths.balance, align: 'right' });
 
             currentY += 32;
         });
