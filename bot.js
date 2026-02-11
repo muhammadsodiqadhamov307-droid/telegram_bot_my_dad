@@ -60,6 +60,10 @@ async function createUser(telegramId, username) {
 // --- Bot Commands ---
 bot.start(async (ctx) => {
     const user = await createUser(ctx.from.id, ctx.from.username);
+
+    // Clear old keyboard first to force update
+    await ctx.reply('Menu yangilanmoqda...', { reply_markup: { remove_keyboard: true } });
+
     await ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Yoki quyidagi tugmalardan foydalaning:`, {
         reply_markup: {
             keyboard: [
