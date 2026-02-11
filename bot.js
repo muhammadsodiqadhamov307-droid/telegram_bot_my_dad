@@ -587,26 +587,7 @@ async function generateExcelReport(ctx, period) {
         worksheet.getCell('B3').value = user.username || ctx.from.first_name;
         worksheet.getCell('B3').font = styles.headerVal;
 
-        if (isHammasi) {
-            worksheet.getCell('D2').value = "Jami Kirim:";
-            worksheet.getCell('E2').value = `+${totalInc.toLocaleString()}`;
-            worksheet.getCell('E2').font = { color: { argb: 'FF059669' }, bold: true };
 
-            worksheet.getCell('D3').value = "Jami Chiqim:";
-            worksheet.getCell('E3').value = `-${totalExp.toLocaleString()}`;
-            worksheet.getCell('E3').font = { color: { argb: 'FFdc2626' }, bold: true };
-
-            worksheet.getCell('D4').value = "BALANS:";
-            worksheet.getCell('D4').font = { bold: true };
-            worksheet.getCell('E4').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()}`;
-            worksheet.getCell('E4').font = { color: { argb: balance >= 0 ? 'FF059669' : 'FFdc2626' }, bold: true, size: 12 };
-        } else {
-            // Expense Only View for Info Block
-            worksheet.getCell('D3').value = "Jami Chiqim:";
-            worksheet.getCell('D3').font = { bold: true };
-            worksheet.getCell('E3').value = `-${totalExp.toLocaleString()}`;
-            worksheet.getCell('E3').font = { color: { argb: 'FFdc2626' }, bold: true, size: 12 };
-        }
 
         // Summary Cards (Stylized Row 6-7)
         if (isHammasi) {
