@@ -158,8 +158,7 @@ async function showMainMenu(ctx, isEdit = false) {
     // 3. Web App
     inlineKeyboard.push([{ text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]);
 
-    // 4. Refresh
-    inlineKeyboard.push([{ text: "🔄 Yangilash", callback_data: 'refresh_menu' }]);
+
 
     const keyboard = { inline_keyboard: inlineKeyboard };
 
@@ -689,10 +688,10 @@ async function generateProfessionalPDF(ctx, period) {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
-        const reportData = await getReportData(db, user.id, period);
+        const reportData = await getReportData(db, user.id, period, user.current_project_id);
 
         // Destructure with defaults
-        const { rows = [], periodName = period, startDate = '', endDate = '' } = reportData;
+        const { rows = [], periodName = period, startDate = '', endDate = '', projectName } = reportData;
         let { totalInc = 0, totalExp = 0, startingBalance = 0 } = reportData;
 
         // Ensure numbers are numbers
@@ -714,7 +713,7 @@ async function generateProfessionalPDF(ctx, period) {
         // --- PDF DESIGN ---
 
         // 1. Header
-        doc.fontSize(22).font('Helvetica-Bold').fillColor('#1e293b').text('Moliya Hisoboti', { align: 'center' });
+        doc.fontSize(22).font('Helvetica-Bold').fillColor('#1e293b').text(`Moliya Hisoboti - ${projectName}`, { align: 'center' });
         doc.moveDown(0.3);
         doc.strokeColor('#cbd5e1').lineWidth(2).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
         doc.moveDown(0.5);
