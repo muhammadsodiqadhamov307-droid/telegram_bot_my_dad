@@ -29,10 +29,24 @@ export const subscribeLogs = (listener: () => void) => {
 addLog(`Configured API URL: ${FINAL_URL}`);
 
 // Get Telegram WebApp initData for authentication
+// Get Telegram WebApp initData for authentication
 function getAuthToken(): string {
-    const token = window.Telegram?.WebApp?.initData || '';
-    if (!token) addLog('WARNING: No initData found!');
-    return token;
+    // Try multiple sources
+    let token: string | undefined = window.Telegram?.WebApp?.initData;
+
+    if (!token) {
+        // Fallback: Check URL hash (sometimes initData is there)
+        const hash = window.location.hash.slice(1);
+        if (hash.includes('tgWebAppData=')) {
+            token = new URLSearchParams(hash).get('tgWebAppData') || undefined;
+        }
+    }
+
+    if (!token) {
+        addLog('WARNING: No initData found! checks: window.Telegram=' + !!window.Telegram + ', WebApp=' + !!window.Telegram?.WebApp);
+        // During dev/debug, maybe return a mock if needed, but for prod we need real token
+    }
+    return token || '';
 };
 
 // Create axios instance
