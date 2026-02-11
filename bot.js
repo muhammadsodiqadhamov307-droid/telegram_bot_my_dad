@@ -64,11 +64,16 @@ bot.start(async (ctx) => {
         reply_markup: {
             keyboard: [
                 ['💰 Balans', '📊 Hisobotlar'],
-                [{ text: "📱 Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
+                [{ text: "📱 Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
             ],
             resize_keyboard: true
         }
     });
+});
+
+bot.command('debug', (ctx) => {
+    const url = process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org';
+    ctx.reply(`🔍 **Debug Info:**\n\n🔗 WebApp URL: \`${url}\`\n🤖 Bot Token: ${process.env.BOT_TOKEN ? '✅ Set' : '❌ Missing'}\n📂 Dist Path: ${path.join(__dirname, 'dist')}`, { parse_mode: 'Markdown' });
 });
 
 // Handle "💰 Balans" button
@@ -111,7 +116,7 @@ bot.hears('🔙 Orqaga', async (ctx) => {
         reply_markup: {
             keyboard: [
                 ['💰 Balans', '📊 Hisobotlar'],
-                [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
+                [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]
             ],
             resize_keyboard: true
         }
