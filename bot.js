@@ -215,17 +215,22 @@ async function generateExcelReport(ctx, period) {
         worksheet.getCell('A3').value = 'Foydalanuvchi:';
         worksheet.getCell('B3').value = user.username || ctx.from.first_name;
 
-        // Starting Balance
-        worksheet.getCell('A4').value = "Boshlang'ich balans (period boshida):";
-        worksheet.mergeCells('A4:C4');
-        worksheet.getCell('A4').font = { bold: true };
-        worksheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf3f4f6' } };
+        // Starting Balance - Compact
+        worksheet.getCell('A4').value = "Boshlang'ich balans:";
+        worksheet.getCell('A4').font = { size: 9, color: { argb: 'FF64748b' } };
 
-        worksheet.mergeCells('D4:E4');
         worksheet.getCell('D4').value = `${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`;
-        worksheet.getCell('D4').font = { bold: true, color: { argb: startingBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
+        worksheet.getCell('D4').font = {
+            size: 9,
+            bold: true,
+            color: { argb: startingBalance >= 0 ? 'FF059669' : 'FFdc2626' }
+        };
         worksheet.getCell('D4').alignment = { horizontal: 'right' };
-        worksheet.getCell('D4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf3f4f6' } };
+
+        // Thin border below
+        worksheet.getRow(4).border = {
+            bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } }
+        };
 
         // 2. Summary Cards (Shifted to Rows 6-7)
         // Income
@@ -271,11 +276,11 @@ async function generateExcelReport(ctx, period) {
 
         // 3. Table Header (Row 9)
         const headerRow = worksheet.getRow(9);
-        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', 'JORIY BALANS'];
+        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA\n(so\'m)', 'BAL.\n(so\'m)'];
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
         headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-        headerRow.height = 25;
+        headerRow.height = 35; // Increased height for wrapped text
 
         // 4. Data Rows
         let currentRow = 10;
@@ -448,25 +453,28 @@ async function generateProfessionalPDF(ctx, period) {
         doc.fontSize(9).text(`Foydalanuvchi: ${user.username || ctx.from.first_name}`, 40, doc.y + 3);
         doc.moveDown(0.8);
 
-        // 3. STARTING BALANCE
-        const startBalanceY = doc.y;
-        doc.roundedRect(40, startBalanceY, 515, 30, 5).fillAndStroke('#f3f4f6', '#d1d5db');
+        // 3. STARTING BALANCE - COMPACT VERSION
+        doc.fillColor('#64748b')
+            .fontSize(9)
+            .font('Helvetica')
+            .text("Boshlang'ich balans: ", 40, doc.y, { continued: true })
+            .fillColor(startingBalance >= 0 ? '#059669' : '#dc2626')
+            .font('Helvetica-Bold')
+            .text(`${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`);
 
-        doc.fillColor('#374151').fontSize(11).font('Helvetica-Bold').text("Boshlang'ich balans (period boshida):", 50, startBalanceY + 10);
+        doc.moveDown(0.3);
+        doc.strokeColor('#e5e7eb')
+            .lineWidth(1)
+            .moveTo(40, doc.y)
+            .lineTo(500, doc.y)
+            .stroke();
 
-        const startBalanceColor = startingBalance >= 0 ? '#059669' : '#dc2626';
-        doc.fillColor(startBalanceColor).text(
-            `${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`,
-            350, startBalanceY + 10, { width: 195, align: 'right' }
-        );
-
-        doc.y = startBalanceY + 40;
+        doc.moveDown(0.8);
 
         // 4. Summary Cards (Smaller)
         const cardY = doc.y;
         const cardWidth = 140;
         const cardHeight = 70;
-        const cardRadius = 8;
 
         function drawCard(x, color, title, amount) {
             doc.roundedRect(x, cardY, cardWidth, cardHeight, cardRadius).fillAndStroke(color, color);
@@ -481,26 +489,38 @@ async function generateProfessionalPDF(ctx, period) {
 
         doc.y = cardY + cardHeight + 25;
 
-        // 5. Table Header - OPTIMIZED WIDTHS
+        // 5. Table Header - OPTIMIZED WIDTHS & HEADERS
         const tableTop = doc.y;
         const colWidths = {
-            date: 60,
-            description: 150,
-            type: 60,
-            amount: 100,
-            balance: 100
+            date: 55,
+            description: 160,
+            type: 55,
+            amount: 95,
+            balance: 95
         };
 
-        doc.rect(40, tableTop, 470, 28).fillAndStroke('#334155', '#334155');
-        doc.fillColor('#ffffff').fontSize(9.5).font('Helvetica-Bold');
+        // Total width: 460pt (Fits well within A4 margins)
+        doc.rect(40, tableTop, 460, 30).fillAndStroke('#334155', '#334155');
 
-        doc.text('SANA', 42, tableTop + 9, { width: colWidths.date, align: 'center' });
-        doc.text('TAVSIF', 105, tableTop + 9, { width: colWidths.description });
-        doc.text('TUR', 260, tableTop + 9, { width: colWidths.type, align: 'center' });
-        doc.text('SUMMA\n(so\'m)', 325, tableTop + 5, { width: colWidths.amount, align: 'right' });
-        doc.text('BALANS\n(so\'m)', 430, tableTop + 5, { width: colWidths.balance, align: 'right' });
+        doc.fillColor('#ffffff')
+            .fontSize(9.5)
+            .font('Helvetica-Bold')
+            .text('SANA', 42, tableTop + 11, { width: colWidths.date, align: 'center' })
+            .text('TAVSIF', 100, tableTop + 11, { width: colWidths.description })
+            .text('TUR', 265, tableTop + 11, { width: colWidths.type, align: 'center' });
 
-        let currentY = tableTop + 28;
+        // SUMMA column with (so'm)
+        doc.text('SUMMA', 325, tableTop + 7, { width: colWidths.amount, align: 'right' })
+            .fontSize(8)
+            .text('(so\'m)', 325, tableTop + 17, { width: colWidths.amount, align: 'right' });
+
+        // BAL. column with (so'm) - ABBREVIATED
+        doc.fontSize(9.5)
+            .text('BAL.', 425, tableTop + 7, { width: colWidths.balance, align: 'right' })
+            .fontSize(8)
+            .text('(so\'m)', 425, tableTop + 17, { width: colWidths.balance, align: 'right' });
+
+        let currentY = tableTop + 30;
 
         // 6. Table Rows
         const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -516,30 +536,30 @@ async function generateProfessionalPDF(ctx, period) {
             else runningBalance -= row.amount;
 
             const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-            doc.rect(40, currentY, 470, 32).fillAndStroke(rowColor, '#e2e8f0');
+            doc.rect(40, currentY, 460, 32).fillAndStroke(rowColor, '#e2e8f0');
 
             const date = new Date(row.created_at);
             const shortDate = `${date.getDate()}/${date.getMonth() + 1}`;
             const isIncome = row.type === 'income';
 
             // Date
-            doc.fillColor('#475569').fontSize(9).font('Helvetica').text(shortDate, 42, currentY + 9, { width: colWidths.date, align: 'center' });
+            doc.fillColor('#475569').fontSize(9).font('Helvetica').text(shortDate, 42, currentY + 10, { width: colWidths.date, align: 'center' });
 
             // Description
-            doc.fillColor('#0f172a').fontSize(8.5).text(row.description.substring(0, 30), 105, currentY + 9, { width: colWidths.description, ellipsis: true });
+            doc.fillColor('#0f172a').fontSize(8.5).text(row.description.substring(0, 30), 100, currentY + 10, { width: colWidths.description, ellipsis: true });
 
             // Type Badge
             const badgeColor = isIncome ? '#10b981' : '#ef4444';
-            doc.roundedRect(268, currentY + 8, 45, 16, 3).fillAndStroke(badgeColor, badgeColor);
-            doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold').text(isIncome ? 'Kirim' : 'Chiqim', 268, currentY + 11, { width: 45, align: 'center' });
+            doc.roundedRect(270, currentY + 8, 45, 16, 3).fillAndStroke(badgeColor, badgeColor);
+            doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold').text(isIncome ? 'Kirim' : 'Chiqim', 270, currentY + 11, { width: 45, align: 'center' });
 
             // Amount
             const amountColor = isIncome ? '#059669' : '#dc2626';
-            doc.fillColor(amountColor).fontSize(9).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 325, currentY + 9, { width: colWidths.amount, align: 'right' });
+            doc.fillColor(amountColor).fontSize(9).font('Helvetica-Bold').text(`${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`, 325, currentY + 10, { width: colWidths.amount, align: 'right' });
 
             // Running Balance
             const balanceColor = runningBalance >= 0 ? '#0f172a' : '#dc2626';
-            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), 430, currentY + 9, { width: colWidths.balance, align: 'right' });
+            doc.fillColor(balanceColor).fontSize(9).font('Helvetica-Bold').text(runningBalance.toLocaleString(), 425, currentY + 10, { width: colWidths.balance, align: 'right' });
 
             currentY += 32;
         });
@@ -549,21 +569,21 @@ async function generateProfessionalPDF(ctx, period) {
         if (currentY > 700) { doc.addPage(); currentY = 50; }
 
         const summaryY = currentY + 20;
-        doc.roundedRect(40, summaryY, 470, 90, 8).fillAndStroke('#f1f5f9', '#cbd5e1');
+        doc.roundedRect(40, summaryY, 460, 90, 8).fillAndStroke('#f1f5f9', '#cbd5e1');
 
         doc.fillColor('#0f172a').fontSize(10).font('Helvetica').text('Jami Kirim:', 50, summaryY + 12);
-        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 350, summaryY + 12, { align: 'right' });
+        doc.fillColor('#059669').font('Helvetica-Bold').text(`+${totalInc.toLocaleString()} so'm`, 320, summaryY + 12, { align: 'right' });
 
         doc.fillColor('#0f172a').font('Helvetica').text('Jami Chiqim:', 50, summaryY + 30);
-        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 350, summaryY + 30, { align: 'right' });
+        doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-${totalExp.toLocaleString()} so'm`, 320, summaryY + 30, { align: 'right' });
 
-        doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(50, summaryY + 50).lineTo(500, summaryY + 50).stroke();
+        doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(50, summaryY + 50).lineTo(490, summaryY + 50).stroke();
 
         doc.fillColor('#0f172a').fontSize(12).font('Helvetica-Bold').text('YAKUNIY BALANS:', 50, summaryY + 62);
         const finalBalance = startingBalance + totalInc - totalExp;
-        doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, 350, summaryY + 62, { align: 'right' });
+        doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, 320, summaryY + 62, { align: 'right' });
 
-        doc.fillColor('#94a3b8').fontSize(7).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString()}`, 350, 780, { align: 'right' });
+        doc.fillColor('#94a3b8').fontSize(7).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString('uz-UZ')}`, 350, 780, { align: 'right' });
 
         doc.end();
 
