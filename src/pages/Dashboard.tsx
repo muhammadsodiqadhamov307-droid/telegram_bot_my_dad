@@ -33,7 +33,7 @@ function Dashboard() {
 
     // Delete mutation
     const deleteMutation = useMutation({
-        mutationFn: (id: number) => apiClient.deleteTransaction(id),
+        mutationFn: ({ id, type }: { id: number; type: string }) => apiClient.deleteTransaction(id, type),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['summary'] });
@@ -221,7 +221,7 @@ function Dashboard() {
                     <AnimatePresence>
                         {filteredTransactions.map((transaction) => (
                             <motion.div
-                                key={transaction.id}
+                                key={`${transaction.type}-${transaction.id}`}
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 20 }}
@@ -247,7 +247,7 @@ function Dashboard() {
                                     <button
                                         onClick={() => {
                                             if (confirm('Tranzaksiyani o\'chirmoqchimisiz?')) {
-                                                deleteMutation.mutate(transaction.id);
+                                                deleteMutation.mutate({ id: transaction.id, type: transaction.type });
                                             }
                                         }}
                                         className="p-2 hover:bg-red-100 dark:hover:bg-red-900 rounded-lg transition-colors"

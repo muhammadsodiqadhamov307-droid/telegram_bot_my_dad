@@ -209,13 +209,24 @@ router.delete('/transactions/:id', async (req, res) => {
         const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', userId);
         if (!userRow) return res.status(404).json({ detail: "User not found" });
 
-        // Try Delete Expense
-        let result = await db.run('DELETE FROM expenses WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
-        if (result.changes > 0) return res.json({ message: "Deleted" });
+        const { type } = req.query; // 'income' or 'expense'
 
-        // Try Delete Income
-        result = await db.run('DELETE FROM income WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
-        if (result.changes > 0) return res.json({ message: "Deleted" });
+        // Targeted Delete (Safe)
+        if (type === 'income') {
+            const result = await db.run('DELETE FROM income WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
+            if (result.changes > 0) return res.json({ message: "Deleted income" });
+        } else if (type === 'expense' || type === 'expenses') {
+            const result = await db.run('DELETE FROM expenses WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
+            if (result.changes > 0) return res.json({ message: "Deleted expense" });
+        } else {
+            // Fallback: Try Delete Expense First (Most likely)
+            let result = await db.run('DELETE FROM expenses WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
+            if (result.changes > 0) return res.json({ message: "Deleted expense" });
+
+            // Try Delete Income
+            result = await db.run('DELETE FROM income WHERE id = ? AND user_id = ?', req.params.id, userRow.id);
+            if (result.changes > 0) return res.json({ message: "Deleted income" });
+        }
 
         res.status(404).json({ detail: "Not found" });
 

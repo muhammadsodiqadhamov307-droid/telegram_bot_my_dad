@@ -120,7 +120,7 @@ export const apiClient = {
         transaction_date?: string;
     }) => api.post('/api/transactions', data),
 
-    deleteTransaction: (id: number) => api.delete(`/api/transactions/${id}`),
+    deleteTransaction: (id: number, type?: string) => api.delete(`/api/transactions/${id}`, { params: { type } }),
 
     // Analytics endpoints
     getSummary: (days: number = 30) => api.get('/api/analytics/summary', { params: { days } }),
