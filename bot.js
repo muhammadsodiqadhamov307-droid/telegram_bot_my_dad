@@ -755,15 +755,24 @@ bot.on('voice', async (ctx) => {
         If no numbers found, return: {"error": "tushunarsiz"}
         `;
 
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    mimeType: "audio/ogg",
-                    data: buffer.toString('base64')
+        let result;
+        try {
+            result = await model.generateContent([
+                prompt,
+                {
+                    inlineData: {
+                        mimeType: "audio/ogg",
+                        data: buffer.toString('base64')
+                    }
                 }
+            ]);
+        } catch (error) {
+            if (error.status === 429 || error.message?.includes('429')) {
+                console.error("QUOTA HIT: Bot is resting until tomorrow.");
+                return ctx.reply("⚠️ Botning kunlik limiti tugadi. Iltimos, ertaga qayta urinib ko'ring! (Google Gemini Free Tier)");
             }
-        ]);
+            throw error;
+        }
 
         const text = result.response.text();
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
