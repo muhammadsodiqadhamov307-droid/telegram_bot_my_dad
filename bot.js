@@ -1,4 +1,4 @@
-
+﻿
 import { Telegraf, Markup } from 'telegraf';
 import express from 'express';
 import cors from 'cors';
@@ -196,7 +196,7 @@ async function showMainMenu(ctx, isEdit = false) {
     if (dbUser.current_project_id && dbUser.current_project_id !== 'ALL') {
         const p = projects.find(p => p.id === dbUser.current_project_id);
         if (p) {
-            persistentKeyboardRows.push(['� Ustalar Oyligi']);
+                        persistentKeyboardRows.push(['👷 Ustalar Oyligi']);
         }
     }
 
@@ -218,6 +218,9 @@ async function showMainMenu(ctx, isEdit = false) {
             await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
     } catch (e) {
+        if (e.description && e.description.includes("message is not modified")) {
+            return; // Ignore harmless error
+        }
         console.error("Menu Error:", e);
         // Fallback
         await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
@@ -1544,4 +1547,5 @@ process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 // Database migration is handled in initDb() called elsewhere or implicitly.
 // We just start the server here.
+
 
