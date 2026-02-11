@@ -796,12 +796,15 @@ bot.on('voice', async (ctx) => {
         For each transaction determine:
         1. "type": "income" or "expense".
         2. "amount": numeric value (integer).
-        3. "description": TRANSCRIBE EXACTLY what was said. Do NOT categorize or guess. (e.g. if user says "sep", write "sep").
+        3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
+           - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
+           - User: "Taksi 20 ming" -> Description: "Taksi"
+           - TRANSCRIBE EXACTLY but REMOVE the money part.
 
         Return STRICT JSON ARRAY:
         [
             {"type": "income", "amount": 50000, "description": "Oylik"},
-            {"type": "expense", "amount": 20000, "description": "Sep"}
+            {"type": "expense", "amount": 20000, "description": "Taksi"}
         ]
         
         If no numbers found, return: {"error": "tushunarsiz"}
@@ -843,7 +846,7 @@ bot.on('voice', async (ctx) => {
         let msg = "📝 Quyidagi bitimlarni tasdiqlaysizmi?\n\n";
         data.forEach((item, index) => {
             const icon = item.type === 'income' ? '🟢' : '🔴';
-            msg += `${index + 1}. ${icon} ${item.description}: ${item.amount.toLocaleString()} so'm\n`;
+            msg += `${index + 1}. ${icon} ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
         });
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
