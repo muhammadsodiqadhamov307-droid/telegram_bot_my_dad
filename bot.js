@@ -832,36 +832,41 @@ async function getReportData(db, userId, period, projectId = null) {
         projectName = "Boshqa xarajatlar";
     }
 
+    // UTC+5 Timezone Fix
     const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
+    // Add 5 hours to UTC time to get UZT
+    const uztOffset = 5 * 60 * 60 * 1000;
+    const uztDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + uztOffset);
+
+    const yyyy = uztDate.getFullYear();
+    const mm = String(uztDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(uztDate.getDate()).padStart(2, '0');
     const todayStr = `${yyyy}-${mm}-${dd}`;
 
     if (period === 'today') {
-        dateFilter = `date(created_at, 'localtime') = '${todayStr}'`;
-        startQueryFilter = `date(created_at, 'localtime') < '${todayStr}'`;
+        dateFilter = `date(created_at, '+05:00') = '${todayStr}'`;
+        startQueryFilter = `date(created_at, '+05:00') < '${todayStr}'`;
         periodName = "Bugungi";
         startDate = todayStr;
         endDate = todayStr;
     } else if (period === 'week') {
-        const day = now.getDay() || 7;
-        const weekStart = new Date(now);
+        const day = uztDate.getDay() || 7;
+        const weekStart = new Date(uztDate);
         weekStart.setHours(-24 * (day - 1));
         const wYYYY = weekStart.getFullYear();
         const wMM = String(weekStart.getMonth() + 1).padStart(2, '0');
         const wDD = String(weekStart.getDate()).padStart(2, '0');
         const weekStartStr = `${wYYYY}-${wMM}-${wDD}`;
 
-        dateFilter = `date(created_at, 'localtime') >= '${weekStartStr}'`;
-        startQueryFilter = `date(created_at, 'localtime') < '${weekStartStr}'`;
+        dateFilter = `date(created_at, '+05:00') >= '${weekStartStr}'`;
+        startQueryFilter = `date(created_at, '+05:00') < '${weekStartStr}'`;
         periodName = "Haftalik";
         startDate = weekStartStr;
         endDate = todayStr;
     } else if (period === 'month') {
         const monthStart = `${yyyy}-${mm}-01`;
-        dateFilter = `date(created_at, 'localtime') >= '${monthStart}'`;
-        startQueryFilter = `date(created_at, 'localtime') < '${monthStart}'`;
+        dateFilter = `date(created_at, '+05:00') >= '${monthStart}'`;
+        startQueryFilter = `date(created_at, '+05:00') < '${monthStart}'`;
         periodName = "Oylik";
         startDate = monthStart;
         endDate = todayStr;
