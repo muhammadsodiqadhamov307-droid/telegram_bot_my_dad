@@ -237,20 +237,85 @@ bot.hears('➕ Obyekt Yaratish', async (ctx) => {
     await ctx.reply("Yangi obyekt nomini yozing:");
 });
 
-const deletingProjectUsers = new Set();
 bot.hears('🗑 Obyekt O\'chirish', async (ctx) => {
-    deletingProjectUsers.add(ctx.from.id);
     const db = await openDb();
     const projects = await db.all('SELECT * FROM projects WHERE user_id = ?', ctx.from.id);
 
     if (projects.length === 0) {
-        deletingProjectUsers.delete(ctx.from.id);
         return ctx.reply("Sizda hech qanday obyekt yo'q.");
     }
 
-    let msg = "O'chirmoqchi bo'lgan obyekt nomini yozing:\n\n";
-    projects.forEach(p => msg += `- ${p.name}\n`);
-    await ctx.reply(msg);
+    const inlineKeyboard = [];
+    let row = [];
+    projects.forEach(p => {
+        row.push({ text: `❌ ${p.name}`, callback_data: `confirm_delete_project_${p.id}` });
+        if (row.length === 2) {
+            inlineKeyboard.push(row);
+            row = [];
+        }
+    });
+    if (row.length > 0) inlineKeyboard.push(row);
+
+    inlineKeyboard.push([{ text: "🔙 Orqaga", callback_data: 'main_menu' }]);
+
+    await ctx.reply("O'chirmoqchi bo'lgan obyektingizni tanlang:", {
+        reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+});
+
+bot.action(/confirm_delete_project_(.+)/, async (ctx) => {
+    const projectId = ctx.match[1];
+    const db = await openDb();
+
+    // Check if project exists
+    const project = await db.get('SELECT * FROM projects WHERE id = ?', projectId);
+    if (!project) {
+        await ctx.answerCbQuery("Obyekt topilmadi.", true);
+        return showMainMenu(ctx, true);
+    }
+
+    // Confirmation Dialog
+    await ctx.editMessageText(`⚠️ **${project.name}** o'chirilmoqda!\n\nUnga bog'liq barcha kirim-chiqimlar ham o'chib ketadi. Tasdiqlaysizmi?`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    { text: "✅ Ha, o'chirish", callback_data: `delete_project_final_${projectId}` },
+                    { text: "❌ Yo'q, qaytish", callback_data: 'main_menu' }
+                ]
+            ]
+        }
+    });
+});
+
+bot.action(/delete_project_final_(.+)/, async (ctx) => {
+    const projectId = ctx.match[1];
+    const db = await openDb();
+
+    try {
+        const project = await db.get('SELECT * FROM projects WHERE id = ?', projectId);
+        if (!project) {
+            await ctx.answerCbQuery("Obyekt topilmadi.", true);
+            return showMainMenu(ctx, true);
+        }
+
+        await db.run('DELETE FROM income WHERE project_id = ?', projectId);
+        await db.run('DELETE FROM expenses WHERE project_id = ?', projectId);
+        await db.run('DELETE FROM projects WHERE id = ?', projectId);
+
+        // Reset current project if user was on it
+        const user = await getUser(ctx.from.id);
+        if (user.current_project_id == projectId) {
+            await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', ctx.from.id);
+        }
+
+        await ctx.answerCbQuery(`"${project.name}" o'chirildi!`, true);
+        await showMainMenu(ctx, true);
+
+    } catch (e) {
+        console.error("Delete Error:", e);
+        await ctx.answerCbQuery("Xatolik yuz berdi.", true);
+    }
 });
 
 
@@ -275,42 +340,7 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
-    if (deletingProjectUsers.has(userId)) {
-        deletingProjectUsers.delete(userId);
-        if (text.startsWith('/')) return next();
 
-        try {
-            const db = await openDb();
-            const project = await db.get('SELECT * FROM projects WHERE user_id = ? AND name = ?', userId, text);
-
-            if (!project) {
-                return ctx.reply("Bunday obyekt topilmadi.");
-            }
-
-            // Delete project (Cascade delete logic for transactions could be added here if not DB-enforced)
-            // For now, simpler: delete project, transactions remain but unlinked or we delete them?
-            // User requested "delete the obyekt as well". Safe bet: keep transactions but unlink? 
-            // Or delete? Let's delete transactions associated with it to be clean, or warn. 
-            // Implementation Plan said: "Let's cascade delete for cleanup".
-
-            await db.run('DELETE FROM income WHERE project_id = ?', project.id);
-            await db.run('DELETE FROM expenses WHERE project_id = ?', project.id);
-            await db.run('DELETE FROM projects WHERE id = ?', project.id);
-
-            // Allow user to fall back to global if they were on this project
-            const user = await getUser(userId);
-            if (user.current_project_id === project.id) {
-                await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', userId);
-            }
-
-            await ctx.reply(`🗑 "${text}" obyekti va uning barcha bitimlari o'chirildi.`);
-            await showMainMenu(ctx, false);
-        } catch (e) {
-            console.error(e);
-            await ctx.reply("O'chirishda xatolik bo'ldi.");
-        }
-        return;
-    }
 
     return next();
 });
