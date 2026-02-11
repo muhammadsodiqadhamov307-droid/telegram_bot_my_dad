@@ -174,7 +174,7 @@ async function showMainMenu(ctx, isEdit = false) {
     try {
         // Always send persistent keyboard if it's a fresh /start or command
         if (!isEdit) {
-            await ctx.reply("Quyidagi tugmalardan foydalaning:", { reply_markup: persistentKeyboard });
+            await ctx.reply("🎛", { reply_markup: persistentKeyboard });
         }
 
         if (isEdit && ctx.callbackQuery) {
