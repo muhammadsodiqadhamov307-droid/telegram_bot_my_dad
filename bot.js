@@ -75,7 +75,7 @@ bot.hears('💰 Balans', async (ctx) => {
         if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
 
         const income = await db.get('SELECT SUM(amount) as total FROM income WHERE user_id = ?', user.id);
-        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user_id = ?', user.id);
+        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user.id = ?', user.id);
 
         const totalIncome = income.total || 0;
         const totalExpense = expense.total || 0;
@@ -187,22 +187,22 @@ async function generateExcelReport(ctx, period) {
         const userId = ctx.from.id;
         const db = await openDb();
         const user = await getUser(userId);
-        const { rows, totalInc, totalExp, periodName, startDate, endDate } = await getReportData(db, user.id, period);
+        const { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance } = await getReportData(db, user.id, period);
         const balance = totalInc - totalExp;
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Hisobot ${startDate}`);
 
-        // Set column widths
         worksheet.columns = [
-            { width: 15 },  // A - Date
-            { width: 40 },  // B - Description
-            { width: 15 },  // C - Type
-            { width: 20 }   // D - Amount
+            { width: 15 },
+            { width: 30 },
+            { width: 12 },
+            { width: 18 },
+            { width: 18 }
         ];
 
-        // 1. Header (Row 1-3)
-        worksheet.mergeCells('A1:D1');
+        // 1. Header
+        worksheet.mergeCells('A1:E1');
         const titleCell = worksheet.getCell('A1');
         titleCell.value = 'MOLIYA HISOBOTI';
         titleCell.font = { bold: true, size: 18, color: { argb: 'FF1e40af' } };
@@ -215,59 +215,63 @@ async function generateExcelReport(ctx, period) {
         worksheet.getCell('A3').value = 'Foydalanuvchi:';
         worksheet.getCell('B3').value = user.username || ctx.from.first_name;
 
-        // 2. Summary Cards (Row 5-6)
+        // Starting Balance
+        worksheet.getCell('A4').value = "Boshlang'ich balans (period boshida):";
+        worksheet.mergeCells('A4:C4');
+        worksheet.getCell('A4').font = { bold: true };
+        worksheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf3f4f6' } };
+
+        worksheet.mergeCells('D4:E4');
+        worksheet.getCell('D4').value = `${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`;
+        worksheet.getCell('D4').font = { bold: true, color: { argb: startingBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
+        worksheet.getCell('D4').alignment = { horizontal: 'right' };
+        worksheet.getCell('D4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf3f4f6' } };
+
+        // 2. Summary Cards (Shifted to Rows 6-7)
         // Income
-        worksheet.mergeCells('A5:B5');
-        const incLabel = worksheet.getCell('A5');
+        worksheet.mergeCells('A6:B6');
+        const incLabel = worksheet.getCell('A6');
         incLabel.value = 'JAMI KIRIM';
         incLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         incLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
         incLabel.alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('A6:B6');
-        const incVal = worksheet.getCell('A6');
+        worksheet.mergeCells('A7:B7');
+        const incVal = worksheet.getCell('A7');
         incVal.value = `+${totalInc.toLocaleString()} so'm`;
         incVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
         incVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
         incVal.alignment = { horizontal: 'center' };
 
         // Expense
-        worksheet.mergeCells('C5:D5');
-        const expLabel = worksheet.getCell('C5');
+        worksheet.mergeCells('C6:D6');
+        const expLabel = worksheet.getCell('C6');
         expLabel.value = 'JAMI CHIQIM';
         expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
         expLabel.alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('C6:D6');
-        const expVal = worksheet.getCell('C6');
+        worksheet.mergeCells('C7:D7');
+        const expVal = worksheet.getCell('C7');
         expVal.value = `-${totalExp.toLocaleString()} so'm`;
         expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
         expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
         expVal.alignment = { horizontal: 'center' };
 
-        // Balance (E5:F6 - extended to match request visual, but keeping to 4 cols for mobile view if possible, expanding to E/F as requested)
-        // Request visual showed E/F. Let's start Balance at Row 8 to keep it compact or put it below cards. 
-        // Request specifically asked for E5:F5.
-        // Let's add columns E and F.
+        // Balance
+        worksheet.getCell('E6').value = 'BALANS';
+        worksheet.getCell('E6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getCell('E6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+        worksheet.getCell('E6').alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('E5:F5');
-        const balLabel = worksheet.getCell('E5');
-        balLabel.value = 'BALANS';
-        balLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        balLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-        balLabel.alignment = { horizontal: 'center' };
-
-        worksheet.mergeCells('E6:F6');
-        const balVal = worksheet.getCell('E6');
-        balVal.value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
-        balVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        balVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-        balVal.alignment = { horizontal: 'center' };
+        worksheet.getCell('E7').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
+        worksheet.getCell('E7').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        worksheet.getCell('E7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
+        worksheet.getCell('E7').alignment = { horizontal: 'center' };
 
         // 3. Table Header (Row 9)
         const headerRow = worksheet.getRow(9);
-        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA'];
+        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', 'JORIY BALANS'];
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
         headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -275,9 +279,16 @@ async function generateExcelReport(ctx, period) {
 
         // 4. Data Rows
         let currentRow = 10;
-        rows.forEach((row, index) => {
+        const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        let runningBalance = startingBalance;
+
+        sortedRows.forEach((row, index) => {
             const r = worksheet.getRow(currentRow);
             const date = new Date(row.created_at);
+
+            if (row.type === 'income') runningBalance += row.amount;
+            else runningBalance -= row.amount;
+
             r.getCell(1).value = date.toLocaleDateString();
             r.getCell(2).value = row.description;
 
@@ -290,18 +301,14 @@ async function generateExcelReport(ctx, period) {
             r.getCell(4).font = { bold: true, color: { argb: isIncome ? 'FF059669' : 'FFdc2626' } };
             r.getCell(4).alignment = { horizontal: 'right' };
 
-            if (index % 2 === 1) {
-                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } };
-            }
+            r.getCell(5).value = `${runningBalance.toLocaleString()} so'm`;
+            r.getCell(5).font = { bold: true, color: { argb: runningBalance >= 0 ? 'FF000000' : 'FFdc2626' } };
+            r.getCell(5).alignment = { horizontal: 'right' };
 
-            // Borders
+            if (index % 2 === 1) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } };
+
             r.eachCell({ includeEmpty: false }, (cell) => {
-                cell.border = {
-                    top: { style: 'thin' },
-                    left: { style: 'thin' },
-                    bottom: { style: 'thin' },
-                    right: { style: 'thin' }
-                };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
 
             currentRow++;
@@ -309,29 +316,30 @@ async function generateExcelReport(ctx, period) {
 
         // 5. Footer Totals
         currentRow += 1;
-        worksheet.getCell(`C${currentRow}`).value = 'Jami Kirim:';
-        worksheet.getCell(`C${currentRow}`).font = { bold: true };
-        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`D${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
-        worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+        worksheet.getCell(`D${currentRow}`).value = 'Jami Kirim:';
+        worksheet.getCell(`D${currentRow}`).font = { bold: true };
         worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`E${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
+        worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
 
         currentRow++;
-        worksheet.getCell(`C${currentRow}`).value = 'Jami Chiqim:';
-        worksheet.getCell(`C${currentRow}`).font = { bold: true };
-        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`D${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
-        worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+        worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
+        worksheet.getCell(`D${currentRow}`).font = { bold: true };
         worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`E${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
+        worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
 
         currentRow++;
-        worksheet.getCell(`C${currentRow}`).value = 'YAKUNIY BALANS:';
-        worksheet.getCell(`C${currentRow}`).font = { bold: true, size: 12 };
-        worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`D${currentRow}`).value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
-        worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12, color: { argb: balance >= 0 ? 'FF059669' : 'FFdc2626' } };
+        worksheet.getCell(`D${currentRow}`).value = 'YAKUNIY BALANS:';
+        worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
         worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`D${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
+        const finalBalance = startingBalance + totalInc - totalExp;
+        worksheet.getCell(`E${currentRow}`).value = `${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`;
+        worksheet.getCell(`E${currentRow}`).font = { bold: true, size: 12, color: { argb: finalBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
+        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`E${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
 
         const buffer = await workbook.xlsx.writeBuffer();
         await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
@@ -347,6 +355,7 @@ async function getReportData(db, userId, period) {
     let periodName;
     let startDate;
     let endDate;
+    let startQueryFilter;
 
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -356,6 +365,7 @@ async function getReportData(db, userId, period) {
 
     if (period === 'today') {
         dateFilter = `date(created_at, 'localtime') = '${todayStr}'`;
+        startQueryFilter = `date(created_at, 'localtime') < '${todayStr}'`;
         periodName = "Bugungi";
         startDate = todayStr;
         endDate = todayStr;
@@ -369,12 +379,14 @@ async function getReportData(db, userId, period) {
         const weekStartStr = `${wYYYY}-${wMM}-${wDD}`;
 
         dateFilter = `date(created_at, 'localtime') >= '${weekStartStr}'`;
+        startQueryFilter = `date(created_at, 'localtime') < '${weekStartStr}'`;
         periodName = "Haftalik";
         startDate = weekStartStr;
         endDate = todayStr;
     } else if (period === 'month') {
         const monthStart = `${yyyy}-${mm}-01`;
         dateFilter = `date(created_at, 'localtime') >= '${monthStart}'`;
+        startQueryFilter = `date(created_at, 'localtime') < '${monthStart}'`;
         periodName = "Oylik";
         startDate = monthStart;
         endDate = todayStr;
@@ -391,11 +403,19 @@ async function getReportData(db, userId, period) {
 
     const rows = await db.all(query, userId, userId);
 
+    // Calculate Starting Balance
+    const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND ${startQueryFilter}`;
+    const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND ${startQueryFilter}`;
+
+    const startInc = await db.get(startIncQuery, userId);
+    const startExp = await db.get(startExpQuery, userId);
+    const startingBalance = (startInc.total || 0) - (startExp.total || 0);
+
     let totalInc = 0;
     let totalExp = 0;
     rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
 
-    return { rows, totalInc, totalExp, periodName, startDate, endDate };
+    return { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance };
 }
 
 
