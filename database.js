@@ -48,9 +48,19 @@ async function initDb() {
         amount DECIMAL(10, 2),
         description TEXT,
         category_id INTEGER,
+        project_id INTEGER, -- Link to project
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(category_id) REFERENCES categories(id)
+        FOREIGN KEY(category_id) REFERENCES categories(id),
+        FOREIGN KEY(project_id) REFERENCES projects(id)
+    );
+
+        CREATE TABLE IF NOT EXISTS projects(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id BIGINT,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(telegram_id)
     );
     `);
 
@@ -61,6 +71,19 @@ async function initDb() {
 
     try {
         await db.exec("ALTER TABLE expenses ADD COLUMN category_id INTEGER REFERENCES categories(id)");
+    } catch (e) { /* Column likely exists */ }
+
+    // Multi-Object Migrations
+    try {
+        await db.exec("ALTER TABLE users ADD COLUMN current_project_id INTEGER REFERENCES projects(id)");
+    } catch (e) { /* Column likely exists */ }
+
+    try {
+        await db.exec("ALTER TABLE income ADD COLUMN project_id INTEGER REFERENCES projects(id)");
+    } catch (e) { /* Column likely exists */ }
+
+    try {
+        await db.exec("ALTER TABLE expenses ADD COLUMN project_id INTEGER REFERENCES projects(id)");
     } catch (e) { /* Column likely exists */ }
 
     // Cleanup unwanted categories
