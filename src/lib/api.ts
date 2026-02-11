@@ -1,8 +1,12 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.includes('http')
-    ? import.meta.env.VITE_API_URL
-    : '/api'; // Default to relative path for same-domain deployment
+const ENV_API_URL = import.meta.env.VITE_API_URL;
+
+// Fix: Strip trailing '/api' if present to avoid double /api/api/ prefixes
+// because our individual endpoints (e.g. '/api/transactions') already include it.
+const API_BASE_URL = ENV_API_URL && ENV_API_URL.includes('http')
+    ? (ENV_API_URL.endsWith('/api') ? ENV_API_URL.slice(0, -4) : ENV_API_URL)
+    : ''; // Default to empty (relative) instead of '/api' to avoid /api/api/
 
 const FINAL_URL = API_BASE_URL;
 
