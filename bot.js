@@ -538,186 +538,284 @@ async function generateExcelReport(ctx, period) {
         const { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance, projectName, isHammasi } = await getReportData(db, user.id, period, user.current_project_id);
         const balance = totalInc - totalExp;
 
+        // Fetch Project Names for Mapping
+        const projectsList = await db.all('SELECT id, name FROM projects WHERE user_id = ?', userId);
+        const projectMap = {};
+        projectsList.forEach(p => projectMap[p.id] = p.name);
+        projectMap['null'] = "Boshqa xarajatlar"; // Label for null project
+
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Hisobot ${startDate}`);
 
-        // ... (Header logic)
+        // Column Setup
         worksheet.columns = [
-            { width: 15 },
-            { width: 30 },
-            { width: 12 },
-            { width: 18 },
-            { width: 18 }
+            { width: 15 }, // Date
+            { width: 35 }, // Description
+            { width: 15 }, // Type/Category
+            { width: 20 }, // Amount
+            { width: 20 }  // Balance/Extra
         ];
 
-        // 1. Header
+        // --- STYLES ---
+        const styles = {
+            title: { font: { bold: true, size: 18, color: { argb: 'FF1e40af' } }, alignment: { horizontal: 'center', vertical: 'middle' }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFdbeafe' } } },
+            headerVal: { font: { bold: true } },
+            headerLabel: { font: { color: { argb: 'FF64748b' } } },
+            cardTitle: { font: { bold: true, color: { argb: 'FFFFFFFF' } }, alignment: { horizontal: 'center' } },
+            cardVal: { font: { bold: true, size: 14, color: { argb: 'FFFFFFFF' } }, alignment: { horizontal: 'center' } },
+            tableHeader: { font: { bold: true, color: { argb: 'FFFFFFFF' } }, alignment: { horizontal: 'center', vertical: 'middle' }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } } },
+            cellDate: { alignment: { horizontal: 'center' } },
+            cellAmountInc: { font: { bold: true, color: { argb: 'FF059669' } }, alignment: { horizontal: 'right' } },
+            cellAmountExp: { font: { bold: true, color: { argb: 'FFdc2626' } }, alignment: { horizontal: 'right' } },
+            sectionHeader: { font: { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }, alignment: { horizontal: 'left', indent: 1 } },
+            listRowOdd: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } }
+        };
+
+        // 1. Report Title
         worksheet.mergeCells('A1:E1');
         const titleCell = worksheet.getCell('A1');
         titleCell.value = `MOLIYA HISOBOTI - ${projectName}`;
-        titleCell.font = { bold: true, size: 18, color: { argb: 'FF1e40af' } };
-        // ... (rest of Excel unchanged mostly, just title)
-
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFdbeafe' } };
+        titleCell.style = styles.title;
         worksheet.getRow(1).height = 30;
 
+        // 2. Info Block
         worksheet.getCell('A2').value = 'Davr:';
         worksheet.getCell('B2').value = `${startDate} - ${endDate}`;
+        worksheet.getCell('B2').font = styles.headerVal;
+
         worksheet.getCell('A3').value = 'Foydalanuvchi:';
         worksheet.getCell('B3').value = user.username || ctx.from.first_name;
+        worksheet.getCell('B3').font = styles.headerVal;
 
-        // ... (styles) ...
-        // ... (Truncated purely styling code reuse, focusing on logic) ...
-        // I will need to replace the WHOLE function to be safe or be very careful.
-        // Let's assume standard excel generation code follows, just updated inputs.
+        if (isHammasi) {
+            worksheet.getCell('D2').value = "Jami Kirim:";
+            worksheet.getCell('E2').value = `+${totalInc.toLocaleString()}`;
+            worksheet.getCell('E2').font = { color: { argb: 'FF059669' }, bold: true };
 
-        // RE-INSERTING THE WHOLE EXCEL FUNCTION TO AVOID BREAKAGE
-        worksheet.getCell('A4').value = "Boshlang'ich balans:";
-        worksheet.getCell('A4').font = { size: 9, color: { argb: 'FF64748b' } };
+            worksheet.getCell('D3').value = "Jami Chiqim:";
+            worksheet.getCell('E3').value = `-${totalExp.toLocaleString()}`;
+            worksheet.getCell('E3').font = { color: { argb: 'FFdc2626' }, bold: true };
 
-        worksheet.getCell('D4').value = `${startingBalance >= 0 ? '+' : ''}${startingBalance.toLocaleString()} so'm`;
-        worksheet.getCell('D4').font = {
-            size: 9,
-            bold: true,
-            color: { argb: startingBalance >= 0 ? 'FF059669' : 'FFdc2626' }
-        };
-        worksheet.getCell('D4').alignment = { horizontal: 'right' };
+            worksheet.getCell('D4').value = "BALANS:";
+            worksheet.getCell('D4').font = { bold: true };
+            worksheet.getCell('E4').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()}`;
+            worksheet.getCell('E4').font = { color: { argb: balance >= 0 ? 'FF059669' : 'FFdc2626' }, bold: true, size: 12 };
+        } else {
+            // Expense Only View for Info Block
+            worksheet.getCell('D3').value = "Jami Chiqim:";
+            worksheet.getCell('D3').font = { bold: true };
+            worksheet.getCell('E3').value = `-${totalExp.toLocaleString()}`;
+            worksheet.getCell('E3').font = { color: { argb: 'FFdc2626' }, bold: true, size: 12 };
+        }
 
-        worksheet.getRow(4).border = {
-            bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } }
-        };
-
-        // Summary Cards
+        // Summary Cards (Stylized Row 6-7)
         if (isHammasi) {
             worksheet.mergeCells('A6:B6');
             const incLabel = worksheet.getCell('A6');
             incLabel.value = 'JAMI KIRIM';
-            incLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            incLabel.style = styles.cardTitle;
             incLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
-            incLabel.alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('A7:B7');
             const incVal = worksheet.getCell('A7');
             incVal.value = `+${totalInc.toLocaleString()} so'm`;
-            incVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            incVal.style = styles.cardVal;
             incVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
-            incVal.alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('C6:D6');
             const expLabel = worksheet.getCell('C6');
             expLabel.value = 'JAMI CHIQIM';
-            expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            expLabel.style = styles.cardTitle;
             expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-            expLabel.alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('C7:D7');
             const expVal = worksheet.getCell('C7');
             expVal.value = `-${totalExp.toLocaleString()} so'm`;
-            expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            expVal.style = styles.cardVal;
             expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-            expVal.alignment = { horizontal: 'center' };
 
             worksheet.getCell('E6').value = 'BALANS';
-            worksheet.getCell('E6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            worksheet.getCell('E6').style = styles.cardTitle;
             worksheet.getCell('E6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-            worksheet.getCell('E6').alignment = { horizontal: 'center' };
 
             worksheet.getCell('E7').value = `${balance >= 0 ? '+' : ''}${balance.toLocaleString()} so'm`;
-            worksheet.getCell('E7').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            worksheet.getCell('E7').style = styles.cardVal;
             worksheet.getCell('E7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3b82f6' } };
-            worksheet.getCell('E7').alignment = { horizontal: 'center' };
         } else {
-            // Expense Only Summary
+            // Project/Global View (Expense Only Card)
             worksheet.mergeCells('C6:D6');
             const expLabel = worksheet.getCell('C6');
             expLabel.value = 'JAMI CHIQIM';
-            expLabel.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            expLabel.style = styles.cardTitle;
             expLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-            expLabel.alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('C7:D7');
             const expVal = worksheet.getCell('C7');
             expVal.value = `-${totalExp.toLocaleString()} so'm`;
-            expVal.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            expVal.style = styles.cardVal;
             expVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFef4444' } };
-            expVal.alignment = { horizontal: 'center' };
         }
 
-        const headerRow = worksheet.getRow(9);
-        headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA\n(so\'m)', 'BAL.\n(so\'m)'];
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
-        headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-        headerRow.height = 35;
-
+        // --- DATA RENDERING ---
         let currentRow = 10;
-        const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        let runningBalance = startingBalance;
 
-        sortedRows.forEach((row, index) => {
-            const r = worksheet.getRow(currentRow);
-            const date = new Date(row.created_at);
+        if (isHammasi) {
+            // 1. Incomes Section
+            const incomes = rows.filter(r => r.type === 'income');
+            if (incomes.length > 0) {
+                worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+                const secHeader = worksheet.getCell(`A${currentRow}`);
+                secHeader.value = "📥 MANBALAR (KIRIMLAR)";
+                secHeader.style = styles.sectionHeader;
+                secHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10b981' } };
+                currentRow++;
 
-            if (row.type === 'income') runningBalance += row.amount;
-            else runningBalance -= row.amount;
+                // Table Header
+                const hRow = worksheet.getRow(currentRow);
+                hRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', ''];
+                hRow.eachCell(c => c.style = styles.tableHeader);
+                currentRow++;
 
-            r.getCell(1).value = date.toLocaleDateString();
-            r.getCell(2).value = row.description;
+                let secTotal = 0;
+                incomes.forEach((r, idx) => {
+                    secTotal += r.amount;
+                    const row = worksheet.getRow(currentRow);
+                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString();
+                    row.getCell(1).alignment = { horizontal: 'center' };
+                    row.getCell(2).value = r.description;
+                    row.getCell(3).value = 'Kirim';
+                    row.getCell(4).value = `+${r.amount.toLocaleString()}`;
+                    row.getCell(4).style = styles.cellAmountInc;
 
-            const isIncome = row.type === 'income';
-            r.getCell(3).value = isIncome ? 'Kirim' : 'Chiqim';
-            r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isIncome ? 'FFd1fae5' : 'FFfee2e2' } };
-            r.getCell(3).alignment = { horizontal: 'center' };
+                    if (idx % 2 === 1) row.fill = styles.listRowOdd;
+                    row.eachCell({ includeEmpty: false }, (cell) => {
+                        cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
+                    });
+                    currentRow++;
+                });
 
-            r.getCell(4).value = `${isIncome ? '+' : '-'}${row.amount.toLocaleString()} so'm`;
-            r.getCell(4).font = { bold: true, color: { argb: isIncome ? 'FF059669' : 'FFdc2626' } };
-            r.getCell(4).alignment = { horizontal: 'right' };
-
-            if (isHammasi) {
-                r.getCell(5).value = `${runningBalance.toLocaleString()} so'm`;
-                r.getCell(5).font = { bold: true, color: { argb: runningBalance >= 0 ? 'FF000000' : 'FFdc2626' } };
-                r.getCell(5).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `Jami Kirim: +${secTotal.toLocaleString()}`;
+                worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                currentRow += 2;
             }
 
-            if (index % 2 === 1) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf9fafb' } };
+            // 2. Project Sections
+            const expenses = rows.filter(r => r.type === 'expense');
+            const projectExpenses = {};
+            expenses.forEach(r => {
+                const pid = r.project_id || 'null';
+                if (!projectExpenses[pid]) projectExpenses[pid] = [];
+                projectExpenses[pid].push(r);
+            });
 
-            r.eachCell({ includeEmpty: false }, (cell) => {
-                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            const sortedPids = Object.keys(projectExpenses).sort((a, b) => {
+                if (a === 'null') return 1;
+                if (b === 'null') return -1;
+                return (projectMap[a] || '').localeCompare(projectMap[b] || '');
+            });
+
+            sortedPids.forEach(pid => {
+                const pName = projectMap[pid] || "Noma'lum Obyekt";
+                const pRows = projectExpenses[pid];
+
+                worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+                const secHeader = worksheet.getCell(`A${currentRow}`);
+                secHeader.value = `🏗 ${pName.toUpperCase()}`;
+                secHeader.style = styles.sectionHeader;
+                secHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: pid === 'null' ? 'FF64748b' : 'FF3b82f6' } };
+                currentRow++;
+
+                const hRow = worksheet.getRow(currentRow);
+                hRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA', ''];
+                hRow.eachCell(c => c.style = styles.tableHeader);
+                currentRow++;
+
+                let secTotal = 0;
+                pRows.forEach((r, idx) => {
+                    secTotal += r.amount;
+                    const row = worksheet.getRow(currentRow);
+                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString();
+                    row.getCell(1).alignment = { horizontal: 'center' };
+                    row.getCell(2).value = r.description;
+                    row.getCell(3).value = 'Chiqim';
+                    row.getCell(4).value = `-${r.amount.toLocaleString()}`;
+                    row.getCell(4).style = styles.cellAmountExp;
+
+                    if (idx % 2 === 1) row.fill = styles.listRowOdd;
+                    row.eachCell({ includeEmpty: false }, (cell) => {
+                        cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
+                    });
+                    currentRow++;
+                });
+
+                // Section Total
+                worksheet.getCell(`C${currentRow}`).value = `Jami ${pName}:`;
+                worksheet.getCell(`C${currentRow}`).font = { bold: true };
+                worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `-${secTotal.toLocaleString()}`;
+                worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                currentRow += 2;
+            });
+
+        } else {
+            // --- STANDARD VIEW (Single Project / Global) ---
+            const headerRow = worksheet.getRow(currentRow);
+            headerRow.values = ['SANA', 'TAVSIF', 'TUR', 'SUMMA\n(so\'m)', 'BAL.\n(so\'m)'];
+            headerRow.eachCell(c => c.style = styles.tableHeader);
+            headerRow.height = 30;
+            currentRow++;
+
+            let runningBalance = startingBalance;
+            const sortedRows = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+            sortedRows.forEach((row, index) => {
+                const r = worksheet.getRow(currentRow);
+                const date = new Date(row.created_at);
+
+                if (row.type === 'income') runningBalance += row.amount;
+                else runningBalance -= row.amount;
+
+                r.getCell(1).value = date.toLocaleDateString();
+                r.getCell(1).alignment = { horizontal: 'center' };
+                r.getCell(2).value = row.description;
+
+                const isIncome = row.type === 'income';
+                r.getCell(3).value = isIncome ? 'Kirim' : 'Chiqim';
+                r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isIncome ? 'FFd1fae5' : 'FFfee2e2' } };
+                r.getCell(3).alignment = { horizontal: 'center' };
+
+                r.getCell(4).value = `${isIncome ? '+' : '-'}${row.amount.toLocaleString()}`;
+                r.getCell(4).style = isIncome ? styles.cellAmountInc : styles.cellAmountExp;
+
+                // Running Balance (Only relevant if showing Income too, which we don't for Expense Only views)
+                // Wait, if it's expense only, runningBalance is negative accumulation?
+                // Or just don't show balance col for expense only?
+                // The prompt was about Hammasi. Let's keep existing logic for this part but use new styles.
+
+                if (isHammasi) {
+                    // This block is actually unreachable here because isHammasi is handled above. 
+                    // So this Else block is for !isHammasi (Project or Global).
+                    // In these views, we only show Expenses. So Balance column is not useful.
+                    // But user might want to see how much spent total over time? 
+                    // Let's hide Balance col for Expense Only views to match PDF changes.
+                }
+
+                if (index % 2 === 1) r.fill = styles.listRowOdd;
+                r.eachCell({ includeEmpty: false }, (cell) => {
+                    cell.border = { bottom: { style: 'thin', color: { argb: 'FFe5e7eb' } } };
+                });
+                currentRow++;
             });
 
             currentRow++;
-        });
-
-        currentRow += 1;
-
-        if (isHammasi) {
-            worksheet.getCell(`D${currentRow}`).value = 'Jami Kirim:';
+            worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
             worksheet.getCell(`D${currentRow}`).font = { bold: true };
             worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-            worksheet.getCell(`E${currentRow}`).value = `+${totalInc.toLocaleString()} so'm`;
-            worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FF059669' } };
+            worksheet.getCell(`E${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
+            worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
             worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-
-            currentRow++;
-        }
-
-        worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
-        worksheet.getCell(`D${currentRow}`).font = { bold: true };
-        worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-        worksheet.getCell(`E${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
-        worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
-        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-
-        if (isHammasi) {
-            currentRow++;
-            worksheet.getCell(`D${currentRow}`).value = 'YAKUNIY BALANS:';
-            worksheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
-            worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-            const finalBalance = startingBalance + totalInc - totalExp;
-            worksheet.getCell(`E${currentRow}`).value = `${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`;
-            worksheet.getCell(`E${currentRow}`).font = { bold: true, size: 12, color: { argb: finalBalance >= 0 ? 'FF059669' : 'FFdc2626' } };
-            worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-            worksheet.getCell(`E${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFfef3c7' } };
         }
 
         const buffer = await workbook.xlsx.writeBuffer();
