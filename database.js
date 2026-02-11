@@ -11,6 +11,7 @@ async function openDb() {
 }
 async function initDb() {
     const db = await openDb();
+    await db.exec(`
         CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         telegram_id BIGINT UNIQUE,
@@ -57,7 +58,7 @@ async function initDb() {
     try {
         await db.exec("ALTER TABLE income ADD COLUMN category_id INTEGER REFERENCES categories(id)");
     } catch (e) { /* Column likely exists */ }
-    
+
     try {
         await db.exec("ALTER TABLE expenses ADD COLUMN category_id INTEGER REFERENCES categories(id)");
     } catch (e) { /* Column likely exists */ }
@@ -77,7 +78,7 @@ async function initDb() {
             { name: 'Ta\'lim', type: 'expense', icon: '📚', color: '#14b8a6' },
             { name: 'Sog\'liq', type: 'expense', icon: '💊', color: '#ef4444' }
         ];
-        
+
         const stmt = await db.prepare('INSERT INTO categories (name, type, icon, color, is_default) VALUES (?, ?, ?, ?, 1)');
         for (const cat of defaultCats) {
             await stmt.run(cat.name, cat.type, cat.icon, cat.color);
