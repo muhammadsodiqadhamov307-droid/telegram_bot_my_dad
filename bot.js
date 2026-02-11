@@ -157,8 +157,8 @@ async function sendReportSummary(ctx, period) {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: '📥 PDF Yuklab olish', callback_data: `download_pdf_${period}` },
-                        { text: '📊 Excel Yuklab olish', callback_data: `download_excel_${period}` }
+                        { text: '📥 PDF', callback_data: `download_pdf_${period}` },
+                        { text: '📊 Excel', callback_data: `download_excel_${period}` }
                     ]
                 ]
             }
