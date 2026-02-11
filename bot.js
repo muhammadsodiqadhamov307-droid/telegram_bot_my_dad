@@ -162,227 +162,36 @@ async function showMainMenu(ctx, isEdit = false) {
 
     // ...
 
-    // Project Selection Handlers
-    bot.action(/select_project_(.+)/, async (ctx) => {
-        const projectId = ctx.match[1];
-        const db = await openDb();
-        await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', projectId, ctx.from.id);
-        await ctx.answerCbQuery(`Obyekt tanlandi`);
-        await showMainMenu(ctx, true);
-    });
+    // 3. Web App
+    inlineKeyboard.push([{ text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]);
 
-    bot.action('select_global', async (ctx) => {
-        const db = await openDb();
-        await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', ctx.from.id);
-        await ctx.answerCbQuery(`Boshqa xarajatlar tanlandi`);
-        await showMainMenu(ctx, true);
-    });
+    const keyboard = { inline_keyboard: inlineKeyboard };
 
-    bot.action('select_all', async (ctx) => {
-        const db = await openDb();
-        // Use 'ALL' as a special flag for current_project_id. DB field is TEXT/INTEGER, 'ALL' is valid text.
-        await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', 'ALL', ctx.from.id);
-        await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`);
-        await showMainMenu(ctx, true);
-    });
+    // Persistent Keyboard for Management
+    const persistentKeyboard = {
+        keyboard: [
+            ['➕ Obyekt Yaratish', '🗑 Obyekt O\'chirish']
+        ],
+        resize_keyboard: true,
+        persistent: true
+    };
 
-    // ...
-
-    // Updated confirm_expense to force INCOME to GLOBAL
-    // ... inside confirm_expense handler ...
-    const dbUser = await getUser(userId); // Fetch user 
-
-    for (const item of items) {
-        const table = item.type === 'income' ? 'income' : 'expenses';
-
-        let projectIdToSave = dbUser.current_project_id;
-
-        // LOGIC CHANGE: Income is ALWAYS Global (NULL)
-        if (item.type === 'income') {
-            projectIdToSave = null;
-        } else {
-            // For expenses, if context is 'ALL', default to Global (NULL) or ask? 
-            // User said "Boshqa harajatlar will be like expense".
-            // Let's assume if 'ALL' selected, expense goes to Global.
-            if (projectIdToSave === 'ALL') {
-                projectIdToSave = null;
-            }
+    try {
+        // Always send persistent keyboard if it's a fresh /start or command
+        if (!isEdit) {
+            await ctx.reply("👇 Obyektlar boshqaruvi:", { reply_markup: persistentKeyboard });
         }
 
-        await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id) VALUES (?, ?, ?, ?)`,
-            dbUser.id, item.amount, item.description, projectIdToSave
-        );
-    }
-    // ...
-
-    // Updated getReportData
-    async function getReportData(db, userId, period, projectId = null) {
-        // ... date logic same ...
-
-        // Determine Report Mode
-        const isHammasi = projectId === 'ALL';
-        const isProject = projectId && projectId !== 'ALL';
-
-        let projectName = "Umumiy Hisobot";
-        if (isHammasi) projectName = "Hammasi (Umumiy)";
-        else if (projectId) {
-            const p = await db.get('SELECT name FROM projects WHERE id = ?', projectId);
-            if (p) projectName = p.name;
+        if (isEdit && ctx.callbackQuery) {
+            await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         } else {
-            projectName = "Boshqa xarajatlar";
+            await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
-
-        // Queries
-        let rows = [];
-        let totalInc = 0;
-        let totalExp = 0;
-
-        if (isHammasi) {
-            // HAMMASI MODE:
-            // 1. ALL Income (Global) -> Project ID is usually NULL for income
-            // We assume ALL income is relevant for the "Hammasi" balance.
-            const incomeRows = await db.all(`SELECT 'income' as type, amount, description, created_at, project_id FROM income WHERE user_id = ? AND ${dateFilter} ORDER BY created_at DESC`, userId);
-
-            // 2. ALL Expenses (Grouped by Project later? No, just fetch all)
-            const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at, project_id FROM expenses WHERE user_id = ? AND ${dateFilter} ORDER BY project_id, created_at DESC`, userId); // Order by project for grouping
-
-            rows = [...incomeRows, ...expenseRows];
-
-        } else if (isProject) {
-            // PROJECT MODE:
-            // ONLY Expenses for this project.
-            // User said: "for obyekts... only going to enter chiqim... only show chiqim"
-            const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id = ? ORDER BY created_at DESC`, userId, projectId);
-            rows = expenseRows;
-
-        } else {
-            // GLOBAL/BOSHQA MODE (project_id IS NULL)
-            // Show Global Expenses AND Global Income?
-            // User said "Boshqa harajatlar will be like expense".
-            // Likely standard view: Expenses (Global) + Income (Global).
-            const incomeRows = await db.all(`SELECT 'income' as type, amount, description, created_at FROM income WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
-            const expenseRows = await db.all(`SELECT 'expense' as type, amount, description, created_at FROM expenses WHERE user_id = ? AND ${dateFilter} AND project_id IS NULL ORDER BY created_at DESC`, userId);
-            rows = [...incomeRows, ...expenseRows];
-        }
-
-        // Calc Totals
-        rows.forEach(r => {
-            if (r.type === 'income') totalInc += r.amount;
-            else totalExp += r.amount;
-        });
-
-        // NOTE: For 'isProject', totalInc will be 0.
-
-        // We need to pass the mode to the renderer or let it figure it out?
-        // Let's pass 'isHammasi' flag or similar via 'projectName' or new field.
-        return { rows, totalInc, totalExp, periodName, startDate, endDate, startingBalance: 0, projectName, isHammasi, isProject };
-    }
-
-    // Updated sendReportSummary
-    async function sendReportSummary(ctx, period, isEdit = false) {
-        // ... setup ...
-        const data = await getReportData(db, user.id, period, user.current_project_id);
-        const { rows, totalInc, totalExp, periodName, projectName, isHammasi, isProject } = data;
-
-        if (rows.length === 0) { ... }
-
-        let message = `📊 **${projectName}**\n${periodName} Hisobot\n\n`;
-
-        if (isHammasi) {
-            // HAMMASI RENDERER
-            // 1. Incomes
-            const Incomes = rows.filter(r => r.type === 'income');
-            if (Incomes.length > 0) {
-                message += `📥 **KIRIMLAR:**\n`;
-                Incomes.forEach(r => message += `🟢 ${r.description}: +${r.amount.toLocaleString()}\n`);
-                message += `\n----------------\n`;
-            }
-
-            // 2. Expenses Grouped by Project
-            // Need to fetch project names efficiently.
-            const projects = await db.all('SELECT id, name FROM projects WHERE user.id = ?', user.id);
-            const projectMap = {};
-            projects.forEach(p => projectMap[p.id] = p.name);
-            projectMap['null'] = "Boshqa xarajatlar"; // Global
-
-            const Expenses = rows.filter(r => r.type === 'expense');
-            const tasksByProject = {};
-
-            Expenses.forEach(r => {
-                const pid = r.project_id || 'null';
-                if (!tasksByProject[pid]) tasksByProject[pid] = [];
-                tasksByProject[pid].push(r);
-            });
-
-            // Loop through projects (maybe sort by name or ID)
-            Object.keys(tasksByProject).forEach(pid => {
-                const pName = projectMap[pid] || "O'chirilgan Obyekt";
-                message += `🏗 **${pName}**:\n`;
-                let pTotal = 0;
-                tasksByProject[pid].forEach(r => {
-                    message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
-                    pTotal += r.amount;
-                });
-                message += `   Items Jami: -${pTotal.toLocaleString()}\n`;
-                message += `----------------\n`;
-            });
-
-            // Totals
-            const balance = totalInc - totalExp;
-            message += `\n💰 **JAMI BALANS:**\n` +
-                `🟢 Kirim: +${totalInc.toLocaleString()}\n` +
-                `🔴 Chiqim: -${totalExp.toLocaleString()}\n` +
-                `💵 Qoldiq: ${balance.toLocaleString()}`;
-
-        } else if (isProject) {
-            // PROJECT RENDERER (Expenses Only)
-            rows.forEach(r => {
-                message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
-            });
-            message += `\n────────────────\n` +
-                `🔴 Jami Chiqim: -${totalExp.toLocaleString()} so'm`;
-            // No Balance, No Income
-        } else {
-            // STANDARD/GLOBAL RENDERER
-            // ... (existing logic for mixed content) ...
-            rows.forEach(r => { ... });
-        // ...
-    }
-
-    // ... send message ...
-}
-
-
-// 3. Web App
-inlineKeyboard.push([{ text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }]);
-
-const keyboard = { inline_keyboard: inlineKeyboard };
-
-// Persistent Keyboard for Management
-const persistentKeyboard = {
-    keyboard: [
-        ['➕ Obyekt Yaratish', '🗑 Obyekt O\'chirish']
-    ],
-    resize_keyboard: true,
-    persistent: true
-};
-
-try {
-    // Always send persistent keyboard if it's a fresh /start or command
-    if (!isEdit) {
-        await ctx.reply("👇 Obyektlar boshqaruvi:", { reply_markup: persistentKeyboard });
-    }
-
-    if (isEdit && ctx.callbackQuery) {
-        await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
-    } else {
+    } catch (e) {
+        console.error("Menu Error:", e);
+        // Fallback
         await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
     }
-} catch (e) {
-    console.error("Menu Error:", e);
-    // Fallback
-    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
-}
 }
 
 // --- Bot Commands ---
@@ -407,6 +216,13 @@ bot.action('select_global', async (ctx) => {
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', ctx.from.id);
     await ctx.answerCbQuery(`Umumiy hamyon tanlandi`);
+    await showMainMenu(ctx, true);
+});
+
+bot.action('select_all', async (ctx) => {
+    const db = await openDb();
+    await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', 'ALL', ctx.from.id);
+    await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`);
     await showMainMenu(ctx, true);
 });
 
