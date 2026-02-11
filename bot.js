@@ -426,7 +426,7 @@ async function generateExcelReport(ctx, period) {
 
         const buffer = await workbook.xlsx.writeBuffer();
         await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
-        await showMainMenu(ctx);
+        await showMainMenu(ctx, true);
 
     } catch (e) {
         console.error("Excel Error:", e);
@@ -527,7 +527,7 @@ async function generateProfessionalPDF(ctx, period) {
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
             await ctx.replyWithDocument({ source: pdfData, filename: `Hisobot_${period}.pdf` });
-            await showMainMenu(ctx);
+            await showMainMenu(ctx, true);
         });
 
         // --- PDF DESIGN ---
