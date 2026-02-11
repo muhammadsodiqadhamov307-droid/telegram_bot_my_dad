@@ -24,7 +24,7 @@ if (key.includes('"') || key.includes("'")) {
 
 console.log("\n--- ATTEMPTING CALL ---");
 const genAI = new GoogleGenerativeAI(key);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 (async () => {
     try {
