@@ -2,10 +2,9 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.includes('http')
     ? import.meta.env.VITE_API_URL
-    : 'https://finance-bot-fast.duckdns.org/api';
+    : '/api'; // Default to relative path for same-domain deployment
 
-// FORCE OVERRIDE for debugging if env var is wrong (e.g. IP address)
-const FINAL_URL = API_BASE_URL.includes('35.170') ? 'https://finance-bot-fast.duckdns.org/api' : API_BASE_URL;
+const FINAL_URL = API_BASE_URL;
 
 // Debug logging system
 export const debugLogs: string[] = [];
