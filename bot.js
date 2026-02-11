@@ -7,7 +7,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { openDb } from './database.js';
+import { openDb, initDb } from './database.js'; // Import initDb
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 
@@ -37,6 +37,13 @@ if (!botAccessToken) {
     process.exit(1);
 }
 const bot = new Telegraf(botAccessToken);
+
+// Initialize Database
+initDb().then(() => {
+    console.log("✅ Database initialized successfully");
+}).catch(err => {
+    console.error("❌ Database initialization failed:", err);
+});
 
 // Initialize Gemini
 const geminiApiKey = process.env.GEMINI_API_KEY;
