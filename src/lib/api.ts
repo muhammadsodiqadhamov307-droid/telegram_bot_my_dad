@@ -29,6 +29,7 @@ addLog(`Configured API URL: ${FINAL_URL}`);
 
 // Get Telegram WebApp initData for authentication
 // Get Telegram WebApp initData for authentication
+// Get Telegram WebApp initData for authentication
 function getAuthToken(): string {
     // Try multiple sources
     let token: string | undefined = window.Telegram?.WebApp?.initData;
@@ -42,8 +43,14 @@ function getAuthToken(): string {
     }
 
     if (!token) {
-        addLog('WARNING: No initData found! checks: window.Telegram=' + !!window.Telegram + ', WebApp=' + !!window.Telegram?.WebApp);
-        // During dev/debug, maybe return a mock if needed, but for prod we need real token
+        // DETAILED DEBUGGING
+        const tgObj = !!window.Telegram;
+        const webAppObj = !!window.Telegram?.WebApp;
+        const initDataRaw = window.Telegram?.WebApp?.initData;
+        addLog(`WARNING: No initData! Win.Tg=${tgObj}, WebApp=${webAppObj}, Raw='${initDataRaw}'`);
+
+        // Retry logic often needs to be in the component, but here we can return empty
+        // The interceptor will log "Request sending without Token"
     }
     return token || '';
 };
