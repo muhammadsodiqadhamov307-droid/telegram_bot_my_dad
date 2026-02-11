@@ -74,8 +74,7 @@ async function showMainMenu(ctx, isEdit = false) {
     const keyboard = {
         inline_keyboard: [
             [
-                { text: "💰 Balans", callback_data: 'balance' },
-                { text: "📊 Hisobotlar", callback_data: 'reports_menu' }
+                { text: " Hisobotlar", callback_data: 'reports_menu' }
             ],
             [
                 { text: "📱 Moliya Dashboard", web_app: { url: process.env.WEBAPP_URL || 'https://pulnazorat-bot.duckdns.org' } }
