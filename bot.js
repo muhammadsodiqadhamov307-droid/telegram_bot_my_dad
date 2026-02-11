@@ -76,7 +76,7 @@ bot.on('voice', async (ctx) => {
         const buffer = Buffer.from(arrayBuffer);
 
         // Gemini Processing
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Reverting to stable 1.5 Flash
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Using 2.0 Flash (Stable) per 2026 availability
         const prompt = `Ushbu ovozli xabardan xarajat ma'lumotini ajratib oling. 
         Agar xarajat bo'lsa, JSON formatida qaytaring: {"description": "...", "amount": 12345}.
         Agar tushunarsiz bo'lsa yoki xarajat bo'lmasa: {"error": "tushunarsiz"}.
