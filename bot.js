@@ -661,7 +661,7 @@ async function generateExcelReport(ctx, period) {
                 incomes.forEach((r, idx) => {
                     secTotal += r.amount;
                     const row = worksheet.getRow(currentRow);
-                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString();
+                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                     row.getCell(1).alignment = { horizontal: 'center' };
                     row.getCell(2).value = r.description;
                     row.getCell(3).value = 'Kirim';
@@ -719,7 +719,7 @@ async function generateExcelReport(ctx, period) {
                 pRows.forEach((r, idx) => {
                     secTotal += r.amount;
                     const row = worksheet.getRow(currentRow);
-                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString();
+                    row.getCell(1).value = new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                     row.getCell(1).alignment = { horizontal: 'center' };
                     row.getCell(2).value = r.description;
                     row.getCell(3).value = 'Chiqim';
@@ -761,7 +761,7 @@ async function generateExcelReport(ctx, period) {
                 if (row.type === 'income') runningBalance += row.amount;
                 else runningBalance -= row.amount;
 
-                r.getCell(1).value = date.toLocaleDateString();
+                r.getCell(1).value = date.toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" });
                 r.getCell(1).alignment = { horizontal: 'center' };
                 r.getCell(2).value = row.description;
 
@@ -1018,7 +1018,7 @@ async function generateProfessionalPDF(ctx, period) {
                 doc.fillColor('#10b981').fontSize(12).font('Helvetica-Bold').text("KIRIMLAR", 40, doc.y);
                 doc.moveDown(0.5);
                 Incomes.forEach(r => {
-                    doc.fillColor('#000000').fontSize(10).font('Helvetica').text(`+ ${r.amount.toLocaleString()} - ${r.description} (${new Date(r.created_at).toLocaleDateString()})`, 50, doc.y);
+                    doc.fillColor('#000000').fontSize(10).font('Helvetica').text(`+ ${r.amount.toLocaleString()} - ${r.description} (${new Date(r.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" })})`, 50, doc.y);
                 });
                 doc.moveDown(1);
                 doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
@@ -1073,7 +1073,7 @@ async function generateProfessionalPDF(ctx, period) {
                 if (row.type === 'income') runningBalance += amount; else runningBalance -= amount;
 
                 doc.fillColor('#000000').fontSize(10).font('Helvetica')
-                    .text(`${new Date(row.created_at).toLocaleDateString()}`, 40 + 2, currentY + 10, { width: 60, align: 'center' })
+                    .text(`${new Date(row.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Tashkent" })}`, 40 + 2, currentY + 10, { width: 60, align: 'center' })
                     .text(row.description.substring(0, 40), 40 + 70, currentY + 10)
                     .text(`${row.type === 'income' ? '+' : '-'}${amount.toLocaleString()}`, 360, currentY + 10, { width: 100, align: 'right' });
 
@@ -1106,7 +1106,7 @@ async function generateProfessionalPDF(ctx, period) {
         const finalBalance = totalInc - totalExp;
         doc.fillColor(finalBalance >= 0 ? '#059669' : '#dc2626').text(`${finalBalance >= 0 ? '+' : ''}${finalBalance.toLocaleString()} so'm`, footerValueX, summaryY + 62, { width: footerValueWidth, align: 'right' });
 
-        doc.fillColor('#94a3b8').fontSize(7).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString('uz-UZ')}`, 350, 780, { align: 'right' });
+        doc.fillColor('#94a3b8').fontSize(7).font('Helvetica-Oblique').text(`Yaratilgan: ${new Date().toLocaleString('uz-UZ', { timeZone: "Asia/Tashkent" })}`, 350, 780, { align: 'right' });
 
         doc.end();
 
