@@ -234,7 +234,19 @@ bot.action('select_all', async (ctx) => {
 const creatingProjectUsers = new Set();
 bot.hears('➕ Obyekt Yaratish', async (ctx) => {
     creatingProjectUsers.add(ctx.from.id);
-    await ctx.reply("Yangi obyekt nomini yozing:");
+    await ctx.reply("Yangi obyekt nomini yozing:", {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🔙 Orqaga", callback_data: 'cancel_create_project' }]
+            ]
+        }
+    });
+});
+
+bot.action('cancel_create_project', async (ctx) => {
+    creatingProjectUsers.delete(ctx.from.id);
+    await ctx.answerCbQuery("Bekor qilindi.");
+    await showMainMenu(ctx, true);
 });
 
 bot.hears('🗑 Obyekt O\'chirish', async (ctx) => {
