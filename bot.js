@@ -54,13 +54,80 @@ async function createUser(telegramId, username) {
 // --- Bot Commands ---
 bot.start(async (ctx) => {
     const user = await createUser(ctx.from.id, ctx.from.username);
-    ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat qo'shish uchun menga ovozli xabar yuboring.\n📊 Hisobot ko'rish uchun pastdagi tugmani bosing.`, {
+    ctx.reply(`Salom ${ctx.from.first_name}! Men sizning shaxsiy moliya yordamchingizman. \n\n💸 Xarajat yoki daromad qo'shish uchun menga ovozli xabar yuboring.\n\n👇 Yoki quyidagi tugmalardan foydalaning:`, {
         reply_markup: {
-            inline_keyboard: [
+            keyboard: [
+                ['💰 Balans', '📅 Bugungi hisobot'],
                 [{ text: "📱 Ilovani ochish", web_app: { url: process.env.WEBAPP_URL || 'https://google.com' } }]
-            ]
+            ],
+            resize_keyboard: true
         }
     });
+});
+
+// Handle "💰 Balans" button
+bot.hears('💰 Balans', async (ctx) => {
+    try {
+        const userId = ctx.from.id;
+        const db = await openDb();
+        const user = await getUser(userId);
+        if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
+
+        const income = await db.get('SELECT SUM(amount) as total FROM income WHERE user_id = ?', user.id);
+        const expense = await db.get('SELECT SUM(amount) as total FROM expenses WHERE user_id = ?', user.id);
+
+        const totalIncome = income.total || 0;
+        const totalExpense = expense.total || 0;
+        const balance = totalIncome - totalExpense;
+
+        ctx.reply(`💰 **Sizning Balansingiz:**\n\n🟢 Jami Kirim: ${totalIncome.toLocaleString()} so'm\n🔴 Jami Chiqim: ${totalExpense.toLocaleString()} so'm\n\n💵 **Hozirgi Balans: ${balance.toLocaleString()} so'm**`, { parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error(e);
+        ctx.reply("Xatolik yuz berdi.");
+    }
+});
+
+// Handle "📅 Bugungi hisobot" button
+bot.hears('📅 Bugungi hisobot', async (ctx) => {
+    try {
+        const userId = ctx.from.id;
+        const db = await openDb();
+        const user = await getUser(userId);
+        if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
+
+        const rows = await db.all(`
+            SELECT 'income' as type, amount, description, created_at FROM income 
+            WHERE user_id = ? AND date(created_at, 'localtime') = date('now', 'localtime')
+            UNION ALL
+            SELECT 'expense' as type, amount, description, created_at FROM expenses 
+            WHERE user_id = ? AND date(created_at, 'localtime') = date('now', 'localtime')
+            ORDER BY created_at DESC
+        `, user.id, user.id);
+
+        if (rows.length === 0) {
+            return ctx.reply("📅 Bugun hech qanday bitim amalga oshirilmadi.");
+        }
+
+        let message = "📅 **Bugungi Hisobot:**\n\n";
+        let totalInc = 0;
+        let totalExp = 0;
+
+        rows.forEach(row => {
+            const symbol = row.type === 'income' ? '🟢' : '🔴';
+            const sign = row.type === 'income' ? '+' : '-';
+            if (row.type === 'income') totalInc += row.amount;
+            else totalExp += row.amount;
+
+            message += `${symbol} ${row.description}: ${sign}${row.amount.toLocaleString()} so'm\n`;
+        });
+
+        message += `\n----------------\n🟢 Kirim: +${totalInc.toLocaleString()}\n🔴 Chiqim: -${totalExp.toLocaleString()}\n💵 Farq: ${(totalInc - totalExp).toLocaleString()}`;
+
+        ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error(e);
+        ctx.reply("Xatolik yuz berdi.");
+    }
 });
 
 bot.on('voice', async (ctx) => {
@@ -68,7 +135,7 @@ bot.on('voice', async (ctx) => {
         const fileId = ctx.message.voice.file_id;
         const fileLink = await ctx.telegram.getFileLink(fileId);
 
-        ctx.reply("Ovozli xabar tahlil qilinmoqda... ⏳");
+        const processingMsg = await ctx.reply("🤖 Ovozli xabar tahlil qilinmoqda...");
 
         // Download audio
         const response = await fetch(fileLink.href);
@@ -77,37 +144,68 @@ bot.on('voice', async (ctx) => {
 
         // Gemini Processing
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // Recommended free tier model for 2026
-        const prompt = `Ushbu ovozli xabardan xarajat ma'lumotini ajratib oling. 
-        Agar xarajat bo'lsa, JSON formatida qaytaring: {"description": "...", "amount": 12345}.
-        Agar tushunarsiz bo'lsa yoki xarajat bo'lmasa: {"error": "tushunarsiz"}.
-        Amount raqam bo'lishi kerak. Description qisqa bo'lsin.`;
+        const prompt = `
+        Analyze this voice message and extract financial transactions.
+        Context: The user is speaking Uzbek.
+        
+        Identify multiple transactions if present.
+        For each transaction determine:
+        1. "type": is it "income" (kirim, oldim, tushdi, oylik) or "expense" (chiqim, ishlatdim, ketdi, harajat)?
+        2. "amount": the numeric value nicely formatted (integers).
+        3. "description": short summary of what it is.
+
+        Return STRICT JSON ARRAY like this:
+        [
+            {"type": "income", "amount": 50000, "description": "Oylik"},
+            {"type": "expense", "amount": 20000, "description": "Taksi"}
+        ]
+        
+        If no numbers found or unclear, return: {"error": "tushunarsiz"}
+        `;
 
         const result = await model.generateContent([
             prompt,
             {
                 inlineData: {
-                    mimeType: "audio/ogg", // Telegram voice is typically ogg/opus
+                    mimeType: "audio/ogg",
                     data: buffer.toString('base64')
                 }
             }
         ]);
 
         const text = result.response.text();
-        // Clean markdown code blocks if any
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const data = JSON.parse(jsonStr);
 
-        if (data.error) {
-            return ctx.reply("Uzr, xarajatni tushuna olmadim. Qayta urinib ko'ring yoki qo'lda kiriting.");
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            return ctx.reply("Uzr, tushuna olmadim. Qayta urinib ko'ring.");
         }
 
-        // Ask for confirmation
+        if (data.error) {
+            return ctx.reply("Uzr, raqamlarni ajrata olmadim. Aniqroq gapiring.");
+        }
+
+        // Handle single object return (just in case LLM forgets array)
+        if (!Array.isArray(data)) {
+            data = [data];
+        }
+
         pendingTransactions.set(ctx.from.id, data);
 
-        await ctx.reply(`Xarajatni tasdiqlaysizmi?\n\n📝 Tavsif: ${data.description}\n💰 Summa: ${data.amount.toLocaleString()} so'm`,
+        let msg = "📝 **Quyidagi bitimlarni tasdiqlaysizmi?**\n\n";
+        data.forEach((item, index) => {
+            const icon = item.type === 'income' ? '🟢' : '🔴';
+            msg += `${index + 1}. ${icon} ${item.description}: ${item.amount.toLocaleString()} so'm\n`;
+        });
+
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+
+        await ctx.reply(msg,
             Markup.inlineKeyboard([
-                Markup.button.callback('✅ Ha', 'confirm_expense'),
-                Markup.button.callback('❌ Yo\'q', 'cancel_expense')
+                Markup.button.callback('✅ Tasdiqlash', 'confirm_expense'),
+                Markup.button.callback('❌ Bekor qilish', 'cancel_expense')
             ])
         );
 
@@ -119,27 +217,27 @@ bot.on('voice', async (ctx) => {
 
 bot.action('confirm_expense', async (ctx) => {
     const userId = ctx.from.id;
-    const data = pendingTransactions.get(userId);
+    const items = pendingTransactions.get(userId);
 
-    if (!data) {
+    if (!items) {
         return ctx.reply("Sessiya eskirgan. Iltimos qaytadan yuboring.");
     }
 
     try {
         const db = await openDb();
         const user = await getUser(userId);
-        if (!user) await createUser(userId, ctx.from.username); // Ensure user exists
+        if (!user) await createUser(userId, ctx.from.username);
+        const dbUser = await getUser(userId);
 
-        const dbUser = await getUser(userId); // Re-fetch ID
-
-        await db.run('INSERT INTO expenses (user_id, amount, description) VALUES (?, ?, ?)',
-            dbUser.id, data.amount, data.description
-        );
+        for (const item of items) {
+            const table = item.type === 'income' ? 'income' : 'expenses';
+            await db.run(`INSERT INTO ${table} (user_id, amount, description) VALUES (?, ?, ?)`,
+                dbUser.id, item.amount, item.description
+            );
+        }
 
         pendingTransactions.delete(userId);
-
-        // Edit the message to remove buttons
-        await ctx.editMessageText(`✅ Xarajat saqlandi:\n\n📝 ${data.description}\n💰 -${data.amount.toLocaleString()} so'm`);
+        await ctx.editMessageText(`✅ **Barcha bitimlar saqlandi!**`);
 
     } catch (e) {
         console.error(e);
@@ -149,7 +247,7 @@ bot.action('confirm_expense', async (ctx) => {
 
 bot.action('cancel_expense', async (ctx) => {
     pendingTransactions.delete(ctx.from.id);
-    await ctx.editMessageText("❌ Xarajat bekor qilindi.");
+    await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
 // --- API Endpoints for Web App ---
