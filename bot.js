@@ -126,8 +126,30 @@ async function createUser(telegramId, username) {
 }
 
 async function checkUserApproval(ctx) {
-    const user = await getUser(ctx.from.id);
-    if (!user) return false;
+    let user = await getUser(ctx.from.id);
+
+    // IF user doesn't exist (e.g. sent voice before /start), create them as PENDING
+    if (!user) {
+        user = await createUser(ctx.from.id, ctx.from.username);
+        // We should also notify admin here, similar to /start
+        const adminId = process.env.ADMIN_ID;
+        if (adminId) {
+            await ctx.telegram.sendMessage(adminId,
+                `🆕 **Yangi Foydalanuvchi (Avto)!**\n\n👤 Ism: ${ctx.from.first_name}\n🆔 ID: ${ctx.from.id}\n🔗 Username: @${ctx.from.username || 'Yo\'q'}`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: "✅ Ruxsat berish", callback_data: `admin_approve_${ctx.from.id}` },
+                                { text: "❌ Rad etish", callback_data: `admin_reject_${ctx.from.id}` }
+                            ]
+                        ]
+                    }
+                }
+            ).catch(e => console.error("Admin notify error:", e));
+        }
+    }
 
     if (user.status === 'approved') return true;
 
@@ -299,7 +321,8 @@ bot.action(/admin_approve_(.+)/, async (ctx) => {
 
     // Notify User
     try {
-        await ctx.telegram.sendMessage(userId, "✅ Sizning so'rovingiz tasdiqlandi! /start bosib ishlatishingiz mumkin.");
+        const adminUsername = process.env.ADMIN_USERNAME ? `@${process.env.ADMIN_USERNAME}` : "Admin";
+        await ctx.telegram.sendMessage(userId, `✅ Sizning so'rovingiz ${adminUsername} tomonidan tasdiqlandi! /start bosib ishlatishingiz mumkin.`);
     } catch (e) {
         console.error("Failed to notify user", e);
     }
@@ -331,24 +354,13 @@ bot.use(async (ctx, next) => {
     // Skip for admin actions
     if (ctx.callbackQuery && ctx.callbackQuery.data && ctx.callbackQuery.data.startsWith('admin_')) return next();
 
-    const user = await getUser(ctx.from.id);
-    if (user && user.status === 'approved') {
+    const isApproved = await checkUserApproval(ctx);
+    if (isApproved) {
         return next();
     }
 
-    // Silent fail or reply? Better to reply once, but middleware runs on everything.
-    // Let's just stop execution.
-    // Ideally we reply only if it's a message
-    if (ctx.message) {
-        // Check if user exists at all (might be deleted DB)
-        if (!user) {
-            await ctx.reply("Iltimos /start ni bosing.");
-        } else if (user.status === 'pending') {
-            await ctx.reply("⏳ Admin tasdig'i kutilmoqda...");
-        } else if (user.status === 'rejected') {
-            await ctx.reply("❌ Foydalanish cheklangan.");
-        }
-    }
+    // If checkUserApproval returned false, it already sent the "Pending/Rejected" message.
+    // We just stop execution here.
 });
 
 bot.action('main_menu', (ctx) => showMainMenu(ctx, true));
