@@ -64,13 +64,16 @@ function getNextGenAI() {
 }
 
 // Wrapper to handle 429 errors with Key Rotation
+// Wrapper to handle 429 with STRICT Round-Robin
 async function generateContentWithRotation(prompt, buffer) {
     let attempts = 0;
-    // Try each key at least once
+    
+    // We try each key at least once
     while (attempts < apiKeys.length) {
         try {
+            // ALWAYS get a fresh key for every attempt/request
             const genAI = getNextGenAI();
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // User preferred model
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
             const generatePromise = model.generateContent([
                 prompt,
@@ -91,15 +94,13 @@ async function generateContentWithRotation(prompt, buffer) {
 
         } catch (error) {
             attempts++;
-            // Check for Quota Limit (429) or Overloaded (503 sometimes)
+            // Check for Quota Limit (429) or Overloaded (503)
             if (error.status === 429 || error.message?.includes('429')) {
                 console.warn(`⚠️ Key exhausted (429). Switching to next key... (Attempt ${attempts}/${apiKeys.length})`);
-
-                // Add strict 1s delay before retry as requested
+                // Wait briefly before retry to prevent rapid-fire failures
                 await new Promise(resolve => setTimeout(resolve, 1000));
-
             } else {
-                throw error; // Rethrow other errors (like 400 Bad Request) immediately
+                throw error; // Rethrow heavily corrupted errors immediately
             }
         }
     }

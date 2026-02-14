@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "../material3-android-calculator"
+		},
+		{
+			"path": "../buildflow-construction-manager"
+		},
+		{
+			"path": "../telegram_bot"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"java.compile.nullAnalysis.mode": "automatic"
+	}
+}
