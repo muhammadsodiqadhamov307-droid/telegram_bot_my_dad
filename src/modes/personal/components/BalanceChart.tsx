@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface BalanceChartProps {
     data: { date: string; balance: number }[];
@@ -31,7 +31,7 @@ const BalanceChart: React.FC<BalanceChartProps> = ({ data }) => {
                             boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
                             backgroundColor: '#fff'
                         }}
-                        formatter={(value: number) => [`${value.toLocaleString()} UZS`, 'Balans']}
+                        formatter={(value: any) => [`${(value || 0).toLocaleString()} UZS`, 'Balans']}
                     />
                     <Area
                         type="monotone"

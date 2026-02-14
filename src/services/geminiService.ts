@@ -49,7 +49,7 @@ export const getFinancialAdvice = async (summary: any, transactions: any[], user
 
         // Check response structure for @google/genai
         // It usually returns text directly or via candidates
-        return response.text();
+        return response.text;
     } catch (error) {
         console.error("Gemini Error:", error);
         return "Uzr, hozircha maslahat bera olmayman. Keyinroq urinib ko'ring.";

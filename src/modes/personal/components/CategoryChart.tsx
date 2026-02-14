@@ -27,7 +27,7 @@ const CategoryChart: React.FC<CategoryChartProps> = ({ data }) => {
                     </Pie>
                     <Tooltip
                         contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: '#fff' }}
-                        formatter={(value: number) => `${value.toLocaleString()} UZS`}
+                        formatter={(value: any) => `${(value || 0).toLocaleString()} UZS`}
                     />
                     <Legend iconType="circle" />
                 </PieChart>

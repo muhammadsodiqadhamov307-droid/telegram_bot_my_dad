@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, UserPlus, Users } from 'lucide-react';
+import { X, Check, UserPlus } from 'lucide-react';
 import { Category, Balance, DebtContact } from '../../../types';
 import { apiClient } from '../../../lib/api';
 
@@ -21,7 +21,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
     const [description, setDescription] = useState('');
     const [contactId, setContactId] = useState<number | ''>('');
     const [contacts, setContacts] = useState<DebtContact[]>([]);
-    const [newContactName, setNewContactName] = useState('');
+    const [newContactName] = useState('');
 
     useEffect(() => {
         if (balances.length > 0 && !balanceId) {

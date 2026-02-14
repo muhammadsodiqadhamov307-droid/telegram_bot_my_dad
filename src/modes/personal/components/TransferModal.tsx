@@ -15,7 +15,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, balances
     const [fromId, setFromId] = useState(balances[0]?.id.toString() || '');
     const [toId, setToId] = useState(balances[1]?.id.toString() || '');
     const [amount, setAmount] = useState('');
-    const [fee, setFee] = useState('0');
+    const [fee] = useState('0');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

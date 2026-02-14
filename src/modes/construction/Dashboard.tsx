@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../lib/api';
+import { apiClient } from '../../lib/api';
 import { TrendingUp, TrendingDown, Wallet, Plus, Calendar, Search, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import type { Transaction, Summary, Category } from '../types';
-import BalanceChart from '../components/BalanceChart';
-import CategoryChart from '../components/CategoryChart';
+import type { Transaction, Summary, Category } from '../../types';
+import BalanceChart from '../../components/BalanceChart';
+import CategoryChart from '../../components/CategoryChart';
 
 function Dashboard() {
     const [showAddModal, setShowAddModal] = useState(false);
@@ -18,17 +18,17 @@ function Dashboard() {
     // Fetch data
     const { data: summary } = useQuery({
         queryKey: ['summary'],
-        queryFn: () => apiClient.getSummary(30).then(res => res.data as Summary),
+        queryFn: () => apiClient.getSummary(30).then((res: any) => res.data as Summary),
     });
 
     const { data: transactions = [] } = useQuery({
         queryKey: ['transactions'],
-        queryFn: () => apiClient.getTransactions({ limit: 100 }).then(res => res.data as Transaction[]),
+        queryFn: () => apiClient.getTransactions({ limit: 100 }).then((res: any) => res.data as Transaction[]),
     });
 
     const { data: categories = [] } = useQuery({
         queryKey: ['categories'],
-        queryFn: () => apiClient.getCategories().then(res => res.data),
+        queryFn: () => apiClient.getCategories().then((res: any) => res.data),
     });
 
     // Delete mutation
@@ -53,7 +53,7 @@ function Dashboard() {
     });
 
     // Filter transactions
-    const filteredTransactions = transactions.filter(t => {
+    const filteredTransactions = transactions.filter((t: Transaction) => {
         const matchesSearch = t.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             t.category_name?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesFilter = filterType === 'all' || t.type === filterType;
@@ -102,7 +102,7 @@ function Dashboard() {
                         <span className="text-blue-100">Joriy balans</span>
                         <Wallet className="w-6 h-6 text-blue-100" />
                     </div>
-                    <p className="text-3xl font-bold">{formatCurrency(summary?.balance || 0)}</p>
+                    <p className="text-3xl font-bold">{formatCurrency(summary?.total_balance_uzs || 0)}</p>
                 </motion.div>
 
                 <motion.div
@@ -115,7 +115,7 @@ function Dashboard() {
                         <span className="text-green-100">Daromad</span>
                         <TrendingUp className="w-6 h-6 text-green-100" />
                     </div>
-                    <p className="text-3xl font-bold">{formatCurrency(summary?.total_income || 0)}</p>
+                    <p className="text-3xl font-bold">{formatCurrency(summary?.monthly_income_uzs || 0)}</p>
                 </motion.div>
 
                 <motion.div
@@ -128,7 +128,7 @@ function Dashboard() {
                         <span className="text-red-100">Xarajat</span>
                         <TrendingDown className="w-6 h-6 text-red-100" />
                     </div>
-                    <p className="text-3xl font-bold">{formatCurrency(summary?.total_expense || 0)}</p>
+                    <p className="text-3xl font-bold">{formatCurrency(summary?.monthly_expense_uzs || 0)}</p>
                 </motion.div>
             </div>
 
@@ -219,7 +219,7 @@ function Dashboard() {
                 {/* Transaction Items */}
                 <div className="space-y-3">
                     <AnimatePresence>
-                        {filteredTransactions.map((transaction) => (
+                        {filteredTransactions.map((transaction: Transaction) => (
                             <motion.div
                                 key={`${transaction.type}-${transaction.id}`}
                                 initial={{ opacity: 0, x: -20 }}

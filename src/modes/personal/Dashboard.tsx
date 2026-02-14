@@ -53,7 +53,7 @@ const PersonalDashboard: React.FC<DashboardProps> = ({ themePreference, setTheme
     const [activeCurrency, setActiveCurrency] = useState<'UZS' | 'USD'>('UZS');
     const [reportFilter, setReportFilter] = useState({ query: '', type: 'all', balanceId: '' });
 
-    const [dateRange, setDateRange] = useState({
+    const [dateRange] = useState({
         start: startOfMonth(new Date()),
         end: endOfMonth(new Date())
     });
@@ -416,14 +416,16 @@ const PersonalDashboard: React.FC<DashboardProps> = ({ themePreference, setTheme
           <ChevronRight size={18} />
         </button> */}
 
-                {[
-                    { label: 'Profilni tahrirlash', icon: <User size={20} /> },
-                    { label: 'Balanslar', icon: <Wallet size={20} />, onClick: () => setActiveTab('home') },
-                    { label: 'Kategoriyalar', icon: <LayoutGrid size={20} /> },
-                    // { label: 'Barcha ma’lumotlarni tozalash', icon: <Trash2 size={20} />, danger: true, onClick: async () => {
-                    //   if(confirm('Ishonchingiz komilmi?')) { await apiClient.clearAllData(); window.location.reload(); }
-                    // } },
-                ].map((item, i) => (
+                {(
+                    [
+                        { label: 'Profilni tahrirlash', icon: <User size={20} /> },
+                        { label: 'Balanslar', icon: <Wallet size={20} />, onClick: () => setActiveTab('home') },
+                        { label: 'Kategoriyalar', icon: <LayoutGrid size={20} /> },
+                        // { label: 'Barcha ma’lumotlarni tozalash', icon: <Trash2 size={20} />, danger: true, onClick: async () => {
+                        //   if(confirm('Ishonchingiz komilmi?')) { await apiClient.clearAllData(); window.location.reload(); }
+                        // } },
+                    ] as { label: string; icon: React.ReactNode; onClick?: () => void; danger?: boolean }[]
+                ).map((item, i) => (
                     <button key={i} onClick={item.onClick} className={`w-full flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-3xl border border-gray-50 dark:border-gray-800 shadow-sm active:scale-[0.98] transition-all ${item.danger ? 'text-rose-500' : 'dark:text-gray-200'}`}>
                         <div className="flex items-center gap-4">
                             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${item.danger ? 'bg-rose-50 dark:bg-rose-900/20' : 'bg-gray-50 dark:bg-gray-800 text-gray-400'}`}>
