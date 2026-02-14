@@ -1,19 +1,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
     Wallet,
-    ArrowUpCircle,
-    ArrowDownCircle,
     Plus,
     Search,
     Filter,
     Trash2,
     Calendar,
     LayoutGrid,
-    PieChart as PieIcon,
-    Banknote,
     Settings as SettingsIcon,
     Eye,
     EyeOff,
@@ -24,19 +20,11 @@ import {
     User,
     ArrowRightLeft,
     ChevronLeft,
-    RefreshCw,
-    Clock,
-    ExternalLink,
-    ChevronDown,
-    X,
-    Users,
     MoreVertical,
-    Download,
     Moon
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import apiClient from '../../lib/api'; // Fix import path
-import BalanceChart from './components/BalanceChart';
 import CategoryChart from './components/CategoryChart';
 import AddTransactionModal from './components/AddTransactionModal';
 import TransferModal from './components/TransferModal';
