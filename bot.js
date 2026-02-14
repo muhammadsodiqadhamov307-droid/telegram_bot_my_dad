@@ -134,10 +134,13 @@ async function checkUserApproval(ctx) {
         // We should also notify admin here, similar to /start
         const adminId = process.env.ADMIN_ID;
         if (adminId) {
+            // Escape HTML special chars function
+            const escapeHtml = (text) => text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "";
+
             await ctx.telegram.sendMessage(adminId,
-                `🆕 **Yangi Foydalanuvchi (Avto)!**\n\n👤 Ism: ${ctx.from.first_name}\n🆔 ID: ${ctx.from.id}\n🔗 Username: @${ctx.from.username || 'Yo\'q'}`,
+                `🆕 <b>Yangi Foydalanuvchi (Avto)!</b>\n\n👤 Ism: ${escapeHtml(ctx.from.first_name)}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${escapeHtml(ctx.from.username) || 'Yo\'q'}`,
                 {
-                    parse_mode: 'Markdown',
+                    parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [
                             [
@@ -283,10 +286,13 @@ bot.start(async (ctx) => {
         // Notify Admin
         const adminId = process.env.ADMIN_ID;
         if (adminId) {
+            // Escape HTML special chars function
+            const escapeHtml = (text) => text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "";
+
             await ctx.telegram.sendMessage(adminId,
-                `🆕 **Yangi Foydalanuvchi!**\n\n👤 Ism: ${ctx.from.first_name}\n🆔 ID: ${ctx.from.id}\n🔗 Username: @${ctx.from.username || 'Yo\'q'}`,
+                `🆕 <b>Yangi Foydalanuvchi!</b>\n\n👤 Ism: ${escapeHtml(ctx.from.first_name)}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${escapeHtml(ctx.from.username) || 'Yo\'q'}`,
                 {
-                    parse_mode: 'Markdown',
+                    parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [
                             [
