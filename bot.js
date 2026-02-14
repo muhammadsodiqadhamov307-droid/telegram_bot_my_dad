@@ -137,7 +137,8 @@ async function checkUserApproval(ctx) {
     }
 
     // Pending
-    await ctx.reply("⏳ Sizning so'rovingiz ko'rib chiqilmoqda. Iltimos, admin tasdig'ini kuting.");
+    const adminUsername = process.env.ADMIN_USERNAME ? `@${process.env.ADMIN_USERNAME}` : "Admin";
+    await ctx.reply(`⏳ Admin tasdig'i kutilmoqda...\n\nAgar holat o'zgarmasa, iltimos ${adminUsername} bilan bog'laning.`);
     return false;
 }
 
@@ -278,7 +279,8 @@ bot.start(async (ctx) => {
     }
 
     if (user.status !== 'approved') {
-        return ctx.reply("⏳ Assalomu alaykum! Botdan foydalanish uchun admin tasdig'i kerak. Iltimos kuting.", {
+        const adminUsername = process.env.ADMIN_USERNAME ? `@${process.env.ADMIN_USERNAME}` : "Admin";
+        return ctx.reply(`⏳ Assalomu alaykum! Botdan foydalanish uchun admin tasdig'i kerak.\n\nTasdiqlash uchun ${adminUsername} ga yozishingiz mumkin.`, {
             reply_markup: { remove_keyboard: true } // Remove persistent keyboard if any
         });
     }
