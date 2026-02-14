@@ -156,8 +156,11 @@ async function checkUserApproval(ctx) {
 
     if (user.status === 'approved') return true;
 
+    // Debug Log
+    console.log(`Checking Admin Approval: Env AdminID: '${process.env.ADMIN_ID}', UserID: '${ctx.from.id}'`);
+
     // FIX: If this is the ADMIN, and they are stuck in pending (e.g. notification failed), auto-approve them.
-    if (String(process.env.ADMIN_ID) === String(ctx.from.id)) {
+    if (process.env.ADMIN_ID && String(process.env.ADMIN_ID).trim() === String(ctx.from.id).trim()) {
         const db = await openDb();
         await db.run("UPDATE users SET status = 'approved' WHERE telegram_id = ?", ctx.from.id);
         await ctx.reply("👑 Admin aniqlandi. Siz avtomatik tasdiqlandingiz.");
