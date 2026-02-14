@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import Dashboard from './pages/Dashboard';
+import ConstructionDashboard from './modes/construction/Dashboard';
+import PersonalDashboard from './modes/personal/Dashboard';
+import ModeSwitcher from './components/ModeSwitcher';
 import './index.css';
-import { debugLogs, subscribeLogs, addLog } from './lib/api';
+import { debugLogs, subscribeLogs, addLog, getProfile, updateProfileMode } from './lib/api';
+import { ThemePreference } from './types';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -66,13 +69,33 @@ function DebugConsole() {
 }
 
 function App() {
-    const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+        return (localStorage.getItem('hisobchi_theme_pref') as ThemePreference) || 'auto';
+    });
+
+    const [tgColorScheme, setTgColorScheme] = useState<'light' | 'dark'>('light');
+    const [activeMode, setActiveMode] = useState<'personal' | 'construction'>('construction');
 
     useEffect(() => {
-        const tgTheme = window.Telegram?.WebApp?.colorScheme || 'light';
-        setTheme(tgTheme);
-        window.Telegram?.WebApp?.ready();
-        window.Telegram?.WebApp?.expand();
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            setTgColorScheme(tg.colorScheme || 'light');
+
+            const handleThemeChange = () => {
+                setTgColorScheme(tg.colorScheme || 'light');
+            };
+
+            tg.onEvent('themeChanged', handleThemeChange);
+        } else {
+            // Fallback for browser testing
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            setTgColorScheme(mediaQuery.matches ? 'dark' : 'light');
+            const listener = (e: MediaQueryListEvent) => setTgColorScheme(e.matches ? 'dark' : 'light');
+            mediaQuery.addEventListener('change', listener);
+            return () => mediaQuery.removeEventListener('change', listener);
+        }
 
         // Log startup
         addLog('App Started');
@@ -83,13 +106,58 @@ function App() {
             addLog(`JS Error: ${msg} (${line})`);
             return false;
         };
+
+        // Fetch User Profile to get Active Mode
+        getProfile().then(response => {
+            if (response.data && response.data.active_mode) {
+                // Ensure valid mode
+                const mode = response.data.active_mode;
+                if (mode === 'personal' || mode === 'construction') {
+                    setActiveMode(mode);
+                    addLog(`Mode synced: ${mode}`);
+                }
+            }
+        }).catch(err => {
+            addLog(`Profile sync failed: ${err.message}`);
+        });
+
     }, []);
+
+    const effectiveTheme = useMemo(() => {
+        if (themePreference === 'auto') return tgColorScheme;
+        return themePreference;
+    }, [themePreference, tgColorScheme]);
+
+    useEffect(() => {
+        localStorage.setItem('hisobchi_theme_pref', themePreference);
+    }, [themePreference]);
+
+    const handleModeSwitch = (mode: 'personal' | 'construction') => {
+        setActiveMode(mode);
+        updateProfileMode(mode).then(() => {
+            addLog(`Mode persisted: ${mode}`);
+        }).catch(err => {
+            addLog(`Mode persist failed: ${err.message}`);
+        });
+    };
 
     return (
         <QueryClientProvider client={queryClient}>
-            <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-                <Dashboard />
-                <DebugConsole />
+            <div className={effectiveTheme === 'dark' ? 'dark' : ''}>
+                <div className={`min-h-screen bg-[#FDFDFD] dark:bg-gray-950 text-gray-900 dark:text-gray-100 selection:bg-blue-100 dark:selection:bg-blue-900 transition-colors duration-300`}>
+                    <ModeSwitcher currentMode={activeMode} onSwitch={handleModeSwitch} />
+                    <div className="pt-16">
+                        {activeMode === 'construction' ? (
+                            <ConstructionDashboard />
+                        ) : (
+                            <PersonalDashboard
+                                themePreference={themePreference}
+                                setThemePreference={setThemePreference}
+                            />
+                        )}
+                    </div>
+                    <DebugConsole />
+                </div>
             </div>
         </QueryClientProvider>
     );

@@ -108,9 +108,23 @@ export const apiClient = {
         limit?: number;
         type?: string;
         category_id?: number;
-        start_date?: string;
-        end_date?: string;
-    }) => api.get('/api/transactions', { params }),
+        startDate?: string;
+        endDate?: string;
+        mode?: 'personal' | 'construction';
+    }) => {
+        // Map frontend camelCase to backend snake_case if needed, 
+        // but backend seems to expect start_date/end_date based on previous file content.
+        // Let's check the previous file content again... 
+        // Backend params were: start_date, end_date. 
+        // Frontend uses: startDate, endDate.
+        const queryParams = {
+            ...params,
+            start_date: params?.startDate,
+            end_date: params?.endDate,
+        };
+        // Remove mapped keys if double sending is an issue, but usually fine.
+        return api.get('/api/transactions', { params: queryParams });
+    },
 
     createTransaction: (data: {
         type: string;
@@ -129,6 +143,40 @@ export const apiClient = {
 
     // Category endpoints
     getCategories: (type?: string) => api.get('/api/categories', { params: { type } }),
+
+    // Balances
+    getBalances: () => api.get('/api/balances'),
+    createBalance: (data: { title: string; currency: string; amount: number; color?: string; emoji?: string }) => api.post('/api/balances', data),
+
+    // Debts
+    getDebtContacts: (_tab?: 'I_OWE' | 'OWED_TO_ME', currency?: 'UZS' | 'USD') => api.get('/api/debts/contacts', { params: { currency } }), // Backend filters by currency, tab filtering is done on frontend or we can improve backend.
+    // The reference implementation did filtering on frontend. Backend returns list with totals. 
+    // We can just fetch all or filter by currency. 
+    // Let's match backend: /api/debts/contacts?currency=...
+
+    createDebtLedger: (data: {
+        contact_id?: number;
+        name?: string;
+        type: 'BORROW' | 'LEND' | 'REPAY' | 'RECEIVE';
+        amount: number;
+        currency: string;
+        date?: string;
+        note?: string
+    }) => api.post('/api/debts/ledger', data),
+
+    // Transfers
+    createTransfer: (data: {
+        from_balance_id: number;
+        to_balance_id: number;
+        amount: number;
+        fee?: number;
+        date?: string;
+    }) => api.post('/api/transfers', data),
+
+    // Profile Mode
+    updateProfileMode: (mode: 'personal' | 'construction') => api.post('/api/user/mode', { mode }),
 };
+
+export const { getProfile, updateProfileMode } = apiClient;
 
 export default apiClient;

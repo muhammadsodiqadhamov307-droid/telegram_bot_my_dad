@@ -97,25 +97,48 @@ router.get('/transactions', async (req, res) => {
     try {
         const db = await openDb();
         const userId = req.user.id;
-        const { limit = 100, type, category_id, start_date, end_date } = req.query;
+        const { limit = 100, type, category_id, start_date, end_date, mode, balance_id, project_id } = req.query;
 
         // Fetch User Internal ID
-        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', userId);
+        const userRow = await db.get('SELECT id, active_mode FROM users WHERE telegram_id = ?', userId);
         if (!userRow) return res.json([]);
+
+        // Determine Mode: Use query param or user's active mode
+        const currentMode = mode || userRow.active_mode || 'construction';
+
+        // Base Query
+        // Personal: balance_id IS NOT NULL AND project_id IS NULL
+        // Construction: project_id IS NOT NULL (or Global Construction: balance_id IS NULL)
+
+        let whereClause = "user_id = ?";
+        const params = [userRow.id];
+
+        if (currentMode === 'personal') {
+            whereClause += " AND balance_id IS NOT NULL";
+            if (balance_id) {
+                whereClause += " AND balance_id = ?";
+                params.push(balance_id);
+            }
+        } else {
+            // Construction
+            whereClause += " AND balance_id IS NULL";
+            if (project_id) {
+                whereClause += " AND project_id = ?";
+                params.push(project_id);
+            }
+        }
 
         let query = `
             SELECT id, amount, description, category_id, created_at as transaction_date, 'income' as type 
-            FROM income WHERE user_id = ?
+            FROM income WHERE ${whereClause}
             UNION ALL
             SELECT id, amount, description, category_id, created_at as transaction_date, 'expense' as type 
-            FROM expenses WHERE user_id = ?
+            FROM expenses WHERE ${whereClause}
         `;
 
-        const params = [userRow.id, userRow.id];
+        // We need to double the params because we use them in both parts of UNION
+        const fullParams = [...params, ...params];
 
-        // Note: Simple filtering on UNION results is harder in SQL without subquery.
-        // For MVP, we fetch sorted by date desc and filter in JS or wrap in CTE.
-        // Wrapping in CTE for sorting/filtering:
         let fullQuery = `
             SELECT t.*, c.name as category_name, c.icon, c.color 
             FROM (${query}) t
@@ -126,22 +149,26 @@ router.get('/transactions', async (req, res) => {
         if (type) {
             fullQuery += ` AND t.type = '${type}'`;
         }
-        // Date filters would need ISO string comparison
+        if (start_date && end_date) {
+            fullQuery += ` AND t.transaction_date BETWEEN '${start_date}' AND '${end_date}'`;
+        }
 
         fullQuery += ` ORDER BY t.transaction_date DESC LIMIT ?`;
-        params.push(limit);
+        fullParams.push(limit);
 
-        const rows = await db.all(fullQuery, params);
+        const rows = await db.all(fullQuery, fullParams);
 
         res.json(rows.map(row => ({
             id: row.id,
             type: row.type,
             amount: row.amount,
             category_id: row.category_id,
-            category_name: row.category_name || (row.type === 'income' ? 'Kirim' : 'Chiqim'), // Fallback
+            category_name: row.category_name || (row.type === 'income' ? 'Kirim' : 'Chiqim'),
             description: row.description,
             transaction_date: row.transaction_date,
-            created_at: row.transaction_date
+            created_at: row.transaction_date,
+            color: row.color,
+            icon: row.icon
         })));
 
     } catch (e) {
@@ -154,19 +181,39 @@ router.post('/transactions', async (req, res) => {
     try {
         const db = await openDb();
         const userId = req.user.id;
-        const { type, amount, category_id, description, transaction_date } = req.body;
+        const { type, amount, category_id, description, transaction_date, balance_id, project_id, currency } = req.body;
 
         const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', userId);
         if (!userRow) return res.status(404).json({ detail: "User not found" });
 
         let table = type === 'income' ? 'income' : 'expenses';
 
-        // If category_id is missing, try to find "Boshqa" or default? 
-        // Or just insert NULL.
+        // STRICT CONSTRAINT LOGIC HANDLING
+        // Personal: balance_id required, project_id must be null
+        // Construction: balance_id must be null, project_id optional (Global)
+
+        let finalBalanceId = balance_id;
+        let finalProjectId = project_id;
+
+        // If balance_id is present, user intends Personal transaction. Force project_id NULL.
+        if (finalBalanceId) {
+            finalProjectId = null;
+
+            // Update Balance Amount
+            if (type === 'income') {
+                await db.run('UPDATE balances SET amount = amount + ? WHERE id = ?', amount, finalBalanceId);
+            } else {
+                await db.run('UPDATE balances SET amount = amount - ? WHERE id = ?', amount, finalBalanceId);
+            }
+        } else {
+            // Construction Mode
+            finalBalanceId = null;
+            // project_id can be null (Global) or set
+        }
 
         const result = await db.run(
-            `INSERT INTO ${table} (user_id, amount, description, category_id, created_at) VALUES (?, ?, ?, ?, ?)`,
-            userRow.id, amount, description, category_id, transaction_date || new Date().toISOString()
+            `INSERT INTO ${table} (user_id, amount, description, category_id, balance_id, project_id, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            userRow.id, amount, description, category_id, finalBalanceId, finalProjectId, currency || 'UZS', transaction_date || new Date().toISOString()
         );
 
         res.json({
@@ -180,7 +227,7 @@ router.post('/transactions', async (req, res) => {
 
     } catch (e) {
         console.error(e);
-        res.status(500).json({ detail: "Creation failed" });
+        res.status(500).json({ detail: "Creation failed (Constraint Violation?)" });
     }
 });
 
@@ -319,6 +366,186 @@ router.get('/categories', async (req, res) => {
     } catch (e) {
         console.error(e);
         res.status(500).json({ detail: "Error" });
+    }
+});
+
+// --- Balances ---
+router.get('/balances', async (req, res) => {
+    try {
+        const db = await openDb();
+        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', req.user.id);
+        if (!userRow) return res.json([]);
+
+        const balances = await db.all('SELECT * FROM balances WHERE user_id = ? ORDER BY created_at ASC', userRow.id);
+        res.json(balances);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ detail: "Error fetching balances" });
+    }
+});
+
+router.post('/balances', async (req, res) => {
+    try {
+        const db = await openDb();
+        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', req.user.id);
+        if (!userRow) return res.status(404).json({ detail: "User not found" });
+
+        const { title, currency, amount, color, emoji } = req.body;
+
+        const result = await db.run(
+            'INSERT INTO balances (user_id, title, currency, amount, color, emoji) VALUES (?, ?, ?, ?, ?, ?)',
+            userRow.id, title, currency || 'UZS', amount || 0, color, emoji
+        );
+
+        res.json({ id: result.lastID, ...req.body });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ detail: "Error creating balance" });
+    }
+});
+
+// --- Debt Ledger & Contacts ---
+router.get('/debts/contacts', async (req, res) => {
+    try {
+        const db = await openDb();
+        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', req.user.id);
+        if (!userRow) return res.json([]);
+
+        const { currency } = req.query;
+
+        // Fetch contacts
+        const contacts = await db.all('SELECT * FROM debt_contacts WHERE user_id = ?', userRow.id);
+
+        // Calculate Totals per Contact per Currency from Ledger
+        // I_OWE = SUM(BORROW) - SUM(REPAY)
+        // OWED_TO_ME = SUM(LEND) - SUM(RECEIVE)
+
+        const result = [];
+
+        for (const contact of contacts) {
+            let query = `
+                SELECT 
+                    SUM(CASE WHEN type = 'BORROW' THEN amount ELSE 0 END) as borrowed,
+                    SUM(CASE WHEN type = 'REPAY' THEN amount ELSE 0 END) as repaid,
+                    SUM(CASE WHEN type = 'LEND' THEN amount ELSE 0 END) as lent,
+                    SUM(CASE WHEN type = 'RECEIVE' THEN amount ELSE 0 END) as received
+                FROM debt_ledger 
+                WHERE contact_id = ? AND currency = ?
+            `;
+
+            // If currency filter is applied
+            const cur = currency || 'UZS'; // Default to UZS if not specified, or loop through all? 
+            // The UI requests per currency usually. Let's support 'UZS' and 'USD' iteration if no currency needed.
+
+            const stats = await db.get(query, contact.id, cur);
+
+            const i_owe = (stats.borrowed || 0) - (stats.repaid || 0);
+            const owed_to_me = (stats.lent || 0) - (stats.received || 0);
+
+            // Only return if relevant to the requested currency (or if we return all)
+            // For now, simple approach: Return contact with calculated totals for requested currency
+            result.push({
+                ...contact,
+                currency: cur,
+                total_i_owe: i_owe > 0 ? i_owe : 0,
+                total_owed_to_me: owed_to_me > 0 ? owed_to_me : 0
+            });
+        }
+
+        res.json(result);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ detail: "Error fetching debts" });
+    }
+});
+
+router.post('/debts/ledger', async (req, res) => {
+    try {
+        const db = await openDb();
+        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', req.user.id);
+
+        const { contact_id, name, type, amount, currency, date, note } = req.body;
+        // type: BORROW, LEND, REPAY, RECEIVE
+
+        let cId = contact_id;
+
+        // Auto-create contact if name provided but no ID
+        if (!cId && name) {
+            const result = await db.run('INSERT INTO debt_contacts (user_id, name) VALUES (?, ?)', userRow.id, name);
+            cId = result.lastID;
+        }
+
+        if (!cId) return res.status(400).json({ detail: "Contact required" });
+
+        await db.run(
+            'INSERT INTO debt_ledger (user_id, contact_id, type, amount, currency, date, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            userRow.id, cId, type, amount, currency || 'UZS', date || new Date().toISOString(), note
+        );
+
+        res.json({ success: true, contact_id: cId });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ detail: "Error adding debt entry" });
+    }
+});
+
+// --- Transfers ---
+router.post('/transfers', async (req, res) => {
+    try {
+        const db = await openDb();
+        const userRow = await db.get('SELECT id FROM users WHERE telegram_id = ?', req.user.id);
+
+        const { from_balance_id, to_balance_id, amount, fee, date } = req.body;
+        const feeAmount = fee || 0;
+
+        // Atomic Transaction
+        await db.run('BEGIN TRANSACTION');
+
+        try {
+            // 1. Create Transfer Record
+            const transResult = await db.run(
+                'INSERT INTO transfers (user_id, from_balance_id, to_balance_id, amount, fee, date) VALUES (?, ?, ?, ?, ?, ?)',
+                userRow.id, from_balance_id, to_balance_id, amount, feeAmount, date || new Date().toISOString()
+            );
+            const transferId = transResult.lastID;
+
+            // 2. Create OUT Transaction (Expense from Source)
+            await db.run(
+                'INSERT INTO expenses (user_id, amount, description, category_id, balance_id, currency, transfer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                userRow.id, amount, 'Transfer Out', null, from_balance_id, 'UZS', transferId, date // Note: Category? Maybe 'Transfer' category needed
+            );
+
+            // 3. Create IN Transaction (Income to Dest)
+            await db.run(
+                'INSERT INTO income (user_id, amount, description, category_id, balance_id, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', // transfer_id on income?
+                userRow.id, amount, 'Transfer In', null, to_balance_id, 'UZS', date // Missing transfer_id on income table in plan, but useful
+            );
+
+            // 4. Handle Fee (Expense)
+            if (feeAmount > 0) {
+                await db.run(
+                    'INSERT INTO expenses (user_id, amount, description, category_id, balance_id, currency, transfer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    userRow.id, feeAmount, 'Transfer Fee', null, from_balance_id, 'UZS', transferId, date
+                );
+            }
+
+            // 5. Update Balance Amounts
+            await db.run('UPDATE balances SET amount = amount - ? WHERE id = ?', amount + feeAmount, from_balance_id);
+            await db.run('UPDATE balances SET amount = amount + ? WHERE id = ?', amount, to_balance_id);
+
+            await db.run('COMMIT');
+            res.json({ success: true });
+
+        } catch (err) {
+            await db.run('ROLLBACK');
+            throw err;
+        }
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ detail: "Transfer failed" });
     }
 });
 
