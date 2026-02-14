@@ -317,6 +317,14 @@ bot.start(async (ctx) => {
         }
     }
 
+    // FIX: Auto-approve Admin in /start as well
+    if (process.env.ADMIN_ID && String(process.env.ADMIN_ID).trim() === String(ctx.from.id).trim() && user.status !== 'approved') {
+        const db = await openDb();
+        await db.run("UPDATE users SET status = 'approved' WHERE telegram_id = ?", ctx.from.id);
+        user.status = 'approved'; // Update local object
+        await ctx.reply("👑 Admin aniqlandi. Siz avtomatik tasdiqlandingiz.");
+    }
+
     if (user.status !== 'approved') {
         const adminUsername = process.env.ADMIN_USERNAME ? `@${process.env.ADMIN_USERNAME}` : "Admin";
         return ctx.reply(`⏳ Assalomu alaykum! Botdan foydalanish uchun admin tasdig'i kerak.\n\nTasdiqlash uchun ${adminUsername} ga yozishingiz mumkin.`, {
