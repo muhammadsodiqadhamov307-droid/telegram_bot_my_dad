@@ -67,7 +67,7 @@ function getNextGenAI() {
 // Wrapper to handle 429 with STRICT Round-Robin
 async function generateContentWithRotation(prompt, buffer) {
     let attempts = 0;
-    
+
     // We try each key at least once
     while (attempts < apiKeys.length) {
         try {
@@ -120,8 +120,25 @@ async function getUser(telegramId) {
 
 async function createUser(telegramId, username) {
     const db = await openDb();
-    await db.run('INSERT OR IGNORE INTO users (telegram_id, username) VALUES (?, ?)', telegramId, username);
+    // Default status is 'pending' for new users
+    await db.run('INSERT OR IGNORE INTO users (telegram_id, username, status) VALUES (?, ?, ?)', telegramId, username, 'pending');
     return getUser(telegramId);
+}
+
+async function checkUserApproval(ctx) {
+    const user = await getUser(ctx.from.id);
+    if (!user) return false;
+
+    if (user.status === 'approved') return true;
+
+    if (user.status === 'rejected') {
+        await ctx.reply("❌ Sizning so'rovingiz rad etilgan. Botdan foydalana olmaysiz.");
+        return false;
+    }
+
+    // Pending
+    await ctx.reply("⏳ Sizning so'rovingiz ko'rib chiqilmoqda. Iltimos, admin tasdig'ini kuting.");
+    return false;
 }
 
 async function ensureSalaryCategory(userId) {
@@ -234,10 +251,102 @@ async function showMainMenu(ctx, isEdit = false) {
     }
 }
 
-// --- Bot Commands ---
 bot.start(async (ctx) => {
-    await createUser(ctx.from.id, ctx.from.username);
+    let user = await getUser(ctx.from.id);
+
+    if (!user) {
+        user = await createUser(ctx.from.id, ctx.from.username);
+
+        // Notify Admin
+        const adminId = process.env.ADMIN_ID;
+        if (adminId) {
+            await ctx.telegram.sendMessage(adminId,
+                `🆕 **Yangi Foydalanuvchi!**\n\n👤 Ism: ${ctx.from.first_name}\n🆔 ID: ${ctx.from.id}\n🔗 Username: @${ctx.from.username || 'Yo\'q'}`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: "✅ Ruxsat berish", callback_data: `admin_approve_${ctx.from.id}` },
+                                { text: "❌ Rad etish", callback_data: `admin_reject_${ctx.from.id}` }
+                            ]
+                        ]
+                    }
+                }
+            );
+        }
+    }
+
+    if (user.status !== 'approved') {
+        return ctx.reply("⏳ Assalomu alaykum! Botdan foydalanish uchun admin tasdig'i kerak. Iltimos kuting.", {
+            reply_markup: { remove_keyboard: true } // Remove persistent keyboard if any
+        });
+    }
+
     await showMainMenu(ctx, false);
+});
+
+// Admin Actions
+bot.action(/admin_approve_(.+)/, async (ctx) => {
+    const userId = ctx.match[1];
+    const db = await openDb();
+    await db.run("UPDATE users SET status = 'approved' WHERE telegram_id = ?", userId);
+
+    // Notify Admin
+    await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n✅ Ruxsat berildi!`);
+
+    // Notify User
+    try {
+        await ctx.telegram.sendMessage(userId, "✅ Sizning so'rovingiz tasdiqlandi! /start bosib ishlatishingiz mumkin.");
+    } catch (e) {
+        console.error("Failed to notify user", e);
+    }
+});
+
+bot.action(/admin_reject_(.+)/, async (ctx) => {
+    const userId = ctx.match[1];
+    const db = await openDb();
+    await db.run("UPDATE users SET status = 'rejected' WHERE telegram_id = ?", userId);
+
+    // Notify Admin
+    await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n❌ Rad etildi.`);
+
+    // Notify User
+    try {
+        await ctx.telegram.sendMessage(userId, "❌ Sizning so'rovingiz rad etildi.");
+    } catch (e) {
+        console.error("Failed to notify user", e);
+    }
+});
+
+// Create Middleware for other actions
+bot.use(async (ctx, next) => {
+    if (!ctx.from) return next();
+
+    // Skip for start command as it handles its own logic
+    if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/start')) return next();
+
+    // Skip for admin actions
+    if (ctx.callbackQuery && ctx.callbackQuery.data && ctx.callbackQuery.data.startsWith('admin_')) return next();
+
+    const user = await getUser(ctx.from.id);
+    if (user && user.status === 'approved') {
+        return next();
+    }
+
+    // Silent fail or reply? Better to reply once, but middleware runs on everything.
+    // Let's just stop execution.
+    // Ideally we reply only if it's a message
+    if (ctx.message) {
+        // Check if user exists at all (might be deleted DB)
+        if (!user) {
+            await ctx.reply("Iltimos /start ni bosing.");
+        } else if (user.status === 'pending') {
+            await ctx.reply("⏳ Admin tasdig'i kutilmoqda...");
+        } else if (user.status === 'rejected') {
+            await ctx.reply("❌ Foydalanish cheklangan.");
+        }
+    }
 });
 
 bot.action('main_menu', (ctx) => showMainMenu(ctx, true));

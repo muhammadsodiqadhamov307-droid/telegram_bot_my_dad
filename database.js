@@ -16,6 +16,7 @@ async function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         telegram_id BIGINT UNIQUE,
         username TEXT,
+        status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -84,6 +85,11 @@ async function initDb() {
 
     try {
         await db.exec("ALTER TABLE expenses ADD COLUMN project_id INTEGER REFERENCES projects(id)");
+    } catch (e) { /* Column likely exists */ }
+
+    // User Approval Migration
+    try {
+        await db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'approved'"); // Default existing users to approved
     } catch (e) { /* Column likely exists */ }
 
     // Cleanup unwanted categories
