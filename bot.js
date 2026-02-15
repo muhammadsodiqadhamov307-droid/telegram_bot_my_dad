@@ -1700,6 +1700,7 @@ bot.on('voice', async (ctx) => {
             ])
         );
 
+    } catch (error) {
         console.error("Voice processing error:", error);
         ctx.reply("Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.");
     }
