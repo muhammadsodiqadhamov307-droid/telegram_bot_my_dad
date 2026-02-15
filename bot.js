@@ -1509,6 +1509,11 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
         Analyze this ${type} message (Uzbek language) regarding worker salaries (Ustalar oyligi).
         Extract worker names and payment amounts.
         
+        Handle fractional numbers:
+        - "yarim" means 0.5 (half). 
+        - "bir yarim" = 1.5, "ikki yarim" = 2.5.
+        - "3 yarim million" = 3,500,000.
+        
         Return STRICT JSON ARRAY of objects:
         [
             { "description": "Worker Name", "amount": 100000, "type": "expense" }
@@ -1516,8 +1521,11 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
         
         Example User: "Ali ga 200 ming, Valiga 150 ming berdim"
         Output: [{"description": "Ali", "amount": 200000, "type": "expense"}, {"description": "Vali", "amount": 150000, "type": "expense"}]
-        
-        Clean the description to just the name/role. Remove "ga", "uchun", etc.
+
+        IMPORTANT:
+        - If the input is unintelligible or contains no numbers, return: {"error": "tushunarsiz"}
+        - DO NOT return the example data ("Ali", "Vali") if the input does not match.
+        - Clean the description to just the name/role. Remove "ga", "uchun", etc.
         `;
 
         let result;
@@ -1623,7 +1631,7 @@ bot.on('voice', async (ctx) => {
         Identify multiple transactions if present.
         For each transaction determine:
         1. "type": "income" or "expense".
-        2. "amount": numeric value (integer).
+        2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
            - User: "Taksi 20 ming" -> Description: "Taksi"
@@ -1635,7 +1643,9 @@ bot.on('voice', async (ctx) => {
             {"type": "expense", "amount": 20000, "description": "Taksi"}
         ]
         
-        If no numbers found, return: {"error": "tushunarsiz"}
+        IMPORTANT:
+        - If no numbers found or audio is unclear, return: {"error": "tushunarsiz"}
+        - DO NOT RETURN THE EXAMPLES ("Kamozlarga", "Taksi") if they are not in the input.
         `;
 
         let result;
