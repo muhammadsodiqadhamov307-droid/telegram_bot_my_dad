@@ -1631,10 +1631,10 @@ bot.on('voice', async (ctx) => {
         Identify multiple transactions if present.
         For each transaction determine:
         1. "type": "income" or "expense".
-           - STRICTLY classify as "income" if words like: "Kirim", "Ostatka", "Tushum", "Qoldi", "Pribil", "Foyda" are used.
-           - "Ostatka kirim" -> type: "income"
-           - "Kirim" -> type: "income"
-           - Otherwise default to "expense" if it looks like spending (berdim, oldim, to'ladim).
+           - STRICTLY classify as "income" if words like: "Kirim", "Ostatka", "Tushum", "Qoldi", "Pribil", "Foyda", "Oldim" are used.
+           - "Oldim" (Received/Took) -> type: "income" (e.g. "Bahodirdan oldim").
+           - "Sotib oldim" (Bought) -> type: "expense".
+           - "Berdim", "To'ladim", "Xarajat", "Ketdi" -> type: "expense".
         2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
