@@ -1728,6 +1728,10 @@ bot.action('confirm_expense', async (ctx) => {
         }
 
         pendingTransactions.delete(userId);
+
+        // FIX: Remove user from salary mode so they return to normal expense mode
+        salaryModeUsers.delete(userId);
+
         await ctx.editMessageText(`✅ Barcha bitimlar saqlandi!`);
         await showMainMenu(ctx);
 
@@ -1739,6 +1743,7 @@ bot.action('confirm_expense', async (ctx) => {
 
 bot.action('cancel_expense', async (ctx) => {
     pendingTransactions.delete(ctx.from.id);
+    salaryModeUsers.delete(ctx.from.id); // FIX: Also exit mode on cancel
     await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
