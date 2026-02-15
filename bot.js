@@ -1790,10 +1790,13 @@ bot.on('photo', async (ctx) => {
         pendingTransactions.set(ctx.from.id, data);
 
         let msg = "🧾 **Chek Tahlili:**\n\n";
+        let jami = 0;
         data.forEach((item, index) => {
             const amt = Number(item.amount);
+            jami += amt;
             msg += `${index + 1}. 🔴 ${item.description || 'Noma\'lum'} - ${amt.toLocaleString()} so'm\n`;
         });
+        msg += `\n**JAMI:** ${jami.toLocaleString()} so'm`;
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
         await ctx.reply(msg,
