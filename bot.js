@@ -1700,9 +1700,101 @@ bot.on('voice', async (ctx) => {
             ])
         );
 
-    } catch (error) {
         console.error("Voice processing error:", error);
         ctx.reply("Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.");
+    }
+});
+
+// --- Photo (Receipt) Processing ---
+bot.on('photo', async (ctx) => {
+    try {
+        const photos = ctx.message.photo;
+        // Get the last (highest resolution) photo
+        const fileId = photos[photos.length - 1].file_id;
+        const fileLink = await ctx.telegram.getFileLink(fileId);
+
+        const processingMsg = await ctx.reply("📸 Chek tahlil qilinmoqda...");
+
+        // Download image
+        const response = await fetch(fileLink.href);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        // Gemini Prompt for Receipts
+        const prompt = `
+        Analyze this image of a receipt/check.
+        Context: The user is Uzbek.
+
+        Extract:
+        1. "type": Always "expense".
+        2. "amount": The TOTAL amount paid (Jami). Look for "Jami", "Total", "Itogo".
+        3. "description": 
+           - If it's a known store/brand (e.g. Korzinka, Makro), use that name (e.g., "Korzinka").
+           - If not a store, list the main product names or a summary (e.g., "Oziq-ovqat", "Kiyim", "Stroy material").
+           - Keep description short (max 3-4 words).
+
+        Return STRICT JSON ARRAY:
+        [
+            {"type": "expense", "amount": 125000, "description": "Korzinka"}
+        ]
+
+        If image is not a receipt or unclear, return: {"error": "tushunarsiz"}
+        `;
+
+        let result;
+        try {
+            const genAI = getNextGenAI();
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+            result = await model.generateContent([
+                prompt,
+                { inlineData: { mimeType: "image/jpeg", data: buffer.toString('base64') } }
+            ]);
+
+        } catch (error) {
+            console.error("AI Photo Error:", error);
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+            if (error.message === "QUOTA_EXHAUSTED_ALL_KEYS") {
+                return ctx.reply("⚠️ Limit tugadi. Ertaga urinib ko'ring.");
+            }
+            return ctx.reply("Rasm tahlilida xatolik.");
+        }
+
+        const text = result.response.text();
+        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+            if (!Array.isArray(data)) data = [data];
+        } catch (e) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+            return ctx.reply("Chekni o'qib bo'lmadi. Aniqroq rasm yuboring.");
+        }
+
+        if (data.error) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+            return ctx.reply("Bu chekga o'xshamayapti yoki summa ko'rinmadi.");
+        }
+
+        pendingTransactions.set(ctx.from.id, data);
+
+        let msg = "🧾 **Chek Tahlili:**\n\n";
+        data.forEach((item, index) => {
+            msg += `${index + 1}. 🔴 ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
+        });
+
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+        await ctx.reply(msg,
+            Markup.inlineKeyboard([
+                Markup.button.callback('✅ Tasdiqlash', 'confirm_expense'),
+                Markup.button.callback('❌ Bekor qilish', 'cancel_expense')
+            ])
+        );
+
+    } catch (e) {
+        console.error("Photo handler error:", e);
+        ctx.reply("Xatolik yuz berdi.");
     }
 });
 
