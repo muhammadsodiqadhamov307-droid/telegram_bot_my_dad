@@ -1187,6 +1187,19 @@ async function getReportData(db, userId, period, projectId = null) {
         periodName = "Bugungi";
         startDate = todayStr;
         endDate = todayStr;
+    } else if (period === 'yesterday') {
+        const yesterday = new Date(uztDate);
+        yesterday.setDate(uztDate.getDate() - 1);
+        const yY = yesterday.getFullYear();
+        const yM = String(yesterday.getMonth() + 1).padStart(2, '0');
+        const yD = String(yesterday.getDate()).padStart(2, '0');
+        const yesterdayStr = `${yY}-${yM}-${yD}`;
+
+        dateFilter = `date(created_at, '+05:00') = '${yesterdayStr}'`;
+        startQueryFilter = `date(created_at, '+05:00') < '${yesterdayStr}'`;
+        periodName = "Kechagi";
+        startDate = yesterdayStr;
+        endDate = yesterdayStr;
     } else if (period === 'week') {
         const day = uztDate.getDay() || 7;
         const weekStart = new Date(uztDate);
