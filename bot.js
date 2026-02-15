@@ -1726,20 +1726,21 @@ bot.on('photo', async (ctx) => {
         Analyze this image of a receipt/check.
         Context: The user is Uzbek.
 
-        Extract:
+        Task: Extract ALL individual items/products and their prices.
+        
+        For each item line in the receipt:
         1. "type": Always "expense".
-        2. "amount": The TOTAL amount paid (Jami). Look for "Jami", "Total", "Itogo".
-        3. "description": 
-           - If it's a known store/brand (e.g. Korzinka, Makro), use that name (e.g., "Korzinka").
-           - If not a store, list the main product names or a summary (e.g., "Oziq-ovqat", "Kiyim", "Stroy material").
-           - Keep description short (max 3-4 words).
-
-        Return STRICT JSON ARRAY:
+        2. "amount": The price of THAT SPECIFIC ITEM (numeric integer).
+        3. "description": The product name (e.g., "Sement", "G'isht", "Kraska").
+        
+        Return STRICT JSON ARRAY of objects (one for each item):
         [
-            {"type": "expense", "amount": 125000, "description": "Korzinka"}
+            {"type": "expense", "amount": 50000, "description": "2 qop Sement"},
+            {"type": "expense", "amount": 12000, "description": "Mix"}
         ]
 
-        If image is not a receipt or unclear, return: {"error": "tushunarsiz"}
+        If the image is just a total payment terminal slip (not itemized), then just extract the Total amount with description "Xarid (Chek)".
+        If image is unclear, return: {"error": "tushunarsiz"}
         `;
 
         let result;
