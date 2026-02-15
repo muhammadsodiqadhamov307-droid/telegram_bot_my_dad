@@ -45,66 +45,38 @@ initDb().then(() => {
     console.error("❌ Database initialization failed:", err);
 });
 
-// Initialize Gemini Key Pool
-const apiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-if (apiKeys.length === 0) {
-    console.error("❌ CRITICAL ERROR: GEMINI_API_KEY is missing or empty in .env");
+// Initialize Gemini (Single Paid Key)
+if (!process.env.GEMINI_API_KEY) {
+    console.error("❌ CRITICAL ERROR: GEMINI_API_KEY is missing in .env");
+    process.exit(1);
 }
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-let currentKeyIndex = 0;
-
-function getNextGenAI() {
-    if (apiKeys.length === 0) throw new Error("No available Gemini API keys.");
-
-    const key = apiKeys[currentKeyIndex];
-    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
-
-    // console.log(`🔄 Rotated to Key #${currentKeyIndex + 1}`); // Optional debug
-    return new GoogleGenerativeAI(key);
-}
-
-// Wrapper to handle 429 errors with Key Rotation
-// Wrapper to handle 429 with STRICT Round-Robin
+// Helper: Generate Content (Single Key)
 async function generateContentWithRotation(prompt, buffer) {
-    let attempts = 0;
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using standard flash model
 
-    // We try each key at least once
-    while (attempts < apiKeys.length) {
-        try {
-            // ALWAYS get a fresh key for every attempt/request
-            const genAI = getNextGenAI();
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-
-            const generatePromise = model.generateContent([
-                prompt,
-                {
-                    inlineData: {
-                        mimeType: "audio/ogg",
-                        data: buffer.toString('base64')
-                    }
+        const generatePromise = model.generateContent([
+            prompt,
+            {
+                inlineData: {
+                    mimeType: "audio/ogg",
+                    data: buffer.toString('base64')
                 }
-            ]);
-
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 45000)
-            );
-
-            const result = await Promise.race([generatePromise, timeoutPromise]);
-            return result; // Success!
-
-        } catch (error) {
-            attempts++;
-            // Check for Quota Limit (429) or Overloaded (503)
-            if (error.status === 429 || error.message?.includes('429')) {
-                console.warn(`⚠️ Key exhausted (429). Switching to next key... (Attempt ${attempts}/${apiKeys.length})`);
-                // Wait briefly before retry to prevent rapid-fire failures
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } else {
-                throw error; // Rethrow heavily corrupted errors immediately
             }
-        }
+        ]);
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 60000) // 60s timeout
+        );
+
+        return await Promise.race([generatePromise, timeoutPromise]);
+
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        throw error;
     }
-    throw new Error("QUOTA_EXHAUSTED_ALL_KEYS");
 }
 
 
@@ -1535,8 +1507,7 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
             // If text, generateContent(prompt + text).
             // If voice buffer, generateContent([prompt, inlineData]).
 
-            const genAI = getNextGenAI();
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             if (type === 'text') {
                 result = await model.generateContent(prompt + "\nUser Input: " + input);
@@ -1745,8 +1716,7 @@ bot.on('photo', async (ctx) => {
 
         let result;
         try {
-            const genAI = getNextGenAI();
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             result = await model.generateContent([
                 prompt,
