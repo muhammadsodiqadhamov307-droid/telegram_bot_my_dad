@@ -578,9 +578,10 @@ async function showReportsMenu(ctx, isEdit = false) {
         inline_keyboard: [
             [
                 { text: '📅 Bugun', callback_data: 'report_today' },
-                { text: '🗓 Shu hafta', callback_data: 'report_week' }
+                { text: '⏮ Kecha', callback_data: 'report_yesterday' }
             ],
             [
+                { text: '🗓 Shu hafta', callback_data: 'report_week' },
                 { text: '📆 Shu oy', callback_data: 'report_month' }
             ],
             [
@@ -609,6 +610,19 @@ bot.hears('📅 Bugun', (ctx) => sendReportSummary(ctx, 'today'));
 bot.action('report_today', (ctx) => sendReportSummary(ctx, 'today', true));
 
 bot.hears('🗓 Shu hafta', (ctx) => sendReportSummary(ctx, 'week'));
+bot.action('report_yesterday', async (ctx) => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    const y = yesterday.getFullYear();
+    const m = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const d = String(yesterday.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+
+    await sendReportSummary(ctx, 'yesterday', true);
+});
+
 bot.action('report_week', (ctx) => sendReportSummary(ctx, 'week', true));
 
 bot.hears('📆 Shu oy', (ctx) => sendReportSummary(ctx, 'month'));
