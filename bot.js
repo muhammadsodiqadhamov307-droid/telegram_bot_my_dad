@@ -1749,8 +1749,8 @@ bot.on('photo', async (ctx) => {
             return ctx.reply("Bu chekga o'xshamayapti yoki summa ko'rinmadi.");
         }
 
-        // Validate items
-        data = data.filter(item => item && item.amount && !isNaN(item.amount));
+        // Validate items: ensure item is object, has amount, and amount is number
+        data = data.filter(item => item && typeof item === 'object' && item.amount !== undefined && !isNaN(Number(item.amount)));
 
         if (data.length === 0) {
             await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
