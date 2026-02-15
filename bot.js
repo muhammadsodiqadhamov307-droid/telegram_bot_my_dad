@@ -1778,11 +1778,20 @@ bot.on('photo', async (ctx) => {
             return ctx.reply("Bu chekga o'xshamayapti yoki summa ko'rinmadi.");
         }
 
+        // Validate items
+        data = data.filter(item => item && item.amount && !isNaN(item.amount));
+
+        if (data.length === 0) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+            return ctx.reply("Chekdan summa topilmadi.");
+        }
+
         pendingTransactions.set(ctx.from.id, data);
 
         let msg = "🧾 **Chek Tahlili:**\n\n";
         data.forEach((item, index) => {
-            msg += `${index + 1}. 🔴 ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
+            const amt = Number(item.amount);
+            msg += `${index + 1}. 🔴 ${item.description || 'Noma\'lum'} - ${amt.toLocaleString()} so'm\n`;
         });
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
