@@ -436,7 +436,7 @@ bot.hears('➕ Obyekt Yaratish', async (ctx) => {
 
 bot.action('cancel_create_project', async (ctx) => {
     creatingProjectUsers.delete(ctx.from.id);
-    await ctx.answerCbQuery("Bekor qilindi.");
+    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { });
     await showMainMenu(ctx, true);
 });
 
@@ -473,7 +473,7 @@ bot.action(/confirm_delete_project_(.+)/, async (ctx) => {
     // Check if project exists
     const project = await db.get('SELECT * FROM projects WHERE id = ?', projectId);
     if (!project) {
-        await ctx.answerCbQuery("Obyekt topilmadi.", true);
+        await ctx.answerCbQuery("Obyekt topilmadi.", true).catch(() => { });
         return showMainMenu(ctx, true);
     }
 
@@ -1857,46 +1857,6 @@ bot.action('confirm_expense', async (ctx) => {
         console.error(e);
         ctx.reply("Saqlashda xatolik bo'ldi.");
     }
-});
-
-// 2. Admin User View - Show Report Options
-bot.action(/admin_view_user_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
-    const targetUserId = ctx.match[1];
-    //...
-});
-
-bot.action('admin_list_users', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
-    //...
-});
-
-bot.action(/admin_rep_(.+)_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
-    const period = ctx.match[1];
-    //...
-});
-
-bot.action('confirm_expense', async (ctx) => {
-    const userId = ctx.from.id;
-    const items = pendingTransactions.get(userId);
-
-    if (!items) {
-        await ctx.answerCbQuery("Sessiya eskirgan.").catch(() => { });
-        return ctx.reply("Sessiya eskirgan. Iltimos qaytadan yuboring.");
-    }
-    await ctx.answerCbQuery().catch(() => { });
-
-    try {
-        const db = await openDb();
-        //...
-    });
-
-bot.action('cancel_expense', async (ctx) => {
-    pendingTransactions.delete(ctx.from.id);
-    salaryModeUsers.delete(ctx.from.id);
-    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { });
-    await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
 // ==========================================
