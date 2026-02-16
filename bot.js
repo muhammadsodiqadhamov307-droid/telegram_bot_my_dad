@@ -1636,6 +1636,7 @@ bot.on('voice', async (ctx) => {
         2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
+           - User: "Best uchun 50 ming" -> Description: "Best" (Car Name: Besta/Best)
            - User: "Taksi 20 ming" -> Description: "Taksi"
            - TRANSCRIBE EXACTLY but REMOVE the money part.
 
