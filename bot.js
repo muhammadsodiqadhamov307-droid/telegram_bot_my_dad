@@ -2211,11 +2211,14 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
             message += `\n────────────────\nJami Chiqim: -${totalExp.toLocaleString()} so'm`;
         }
 
-        // --- ADMIN KEYS ---
-        // Note: PDF/Excel generation for admin not yet implemented fully (needs admin_download handlers)
-        // For now, just View + Back
+
+        // --- ADMIN KEYS with PDF/Excel Export ---
         const keyboard = {
             inline_keyboard: [
+                [
+                    { text: '📄 PDF', callback_data: `admin_pdf_${period}_${targetUserId}` },
+                    { text: '📊 Excel', callback_data: `admin_excel_${period}_${targetUserId}` }
+                ],
                 [
                     { text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }
                 ]
