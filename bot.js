@@ -1739,22 +1739,68 @@ bot.on('voice', async (ctx) => {
             data = [data];
         }
 
-        pendingTransactions.set(ctx.from.id, data);
+        // Auto-save transactions immediately
+        const db = await openDb();
+        const user = await getUser(ctx.from.id);
+        if (!user) await createUser(ctx.from.id, ctx.from.username);
+        const dbUser = await getUser(ctx.from.id);
 
-        let msg = "📝 Quyidagi bitimlarni tasdiqlaysizmi?\n\n";
-        data.forEach((item, index) => {
-            const icon = item.type === 'income' ? '🟢' : '🔴';
-            msg += `${index + 1}. ${icon} ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
-        });
+        const savedTransactionIds = [];
+
+        for (const item of data) {
+            const table = item.type === 'income' ? 'income' : 'expenses';
+
+            let projectIdToSave = dbUser.current_project_id;
+
+            // Income is ALWAYS Global (NULL)
+            if (item.type === 'income') {
+                projectIdToSave = null;
+            } else {
+                // If 'ALL' is selected, expense goes to Global (NULL)
+                if (projectIdToSave === 'ALL') {
+                    projectIdToSave = null;
+                }
+            }
+
+            const result = await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id, category_id) VALUES (?, ?, ?, ?, ?)`,
+                dbUser.id, item.amount, item.description, projectIdToSave, item.categoryId || null
+            );
+
+            savedTransactionIds.push({
+                id: result.lastID,
+                table: table,
+                type: item.type,
+                description: item.description,
+                amount: item.amount
+            });
+        }
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
 
-        await ctx.reply(msg,
-            Markup.inlineKeyboard([
-                Markup.button.callback('✅ Tasdiqlash', 'confirm_expense'),
-                Markup.button.callback('❌ Bekor qilish', 'cancel_expense')
-            ])
-        );
+        // Single transaction: Just show success message (no buttons)
+        if (data.length === 1) {
+            const item = data[0];
+            const icon = item.type === 'income' ? '🟢' : '🔴';
+            await ctx.reply(`✅ **Saqlandi!**\n\n${icon} ${item.description} - ${item.amount.toLocaleString()} so'm`, {
+                parse_mode: 'Markdown'
+            });
+            await showMainMenu(ctx);
+        } else {
+            // Multiple transactions: Show list with Bekor qilish button
+            pendingTransactions.set(ctx.from.id, savedTransactionIds); // Store IDs for deletion
+
+            let msg = "✅ **Quyidagi bitimlar saqlandi:**\n\n";
+            savedTransactionIds.forEach((item, index) => {
+                const icon = item.type === 'income' ? '🟢' : '🔴';
+                msg += `${index + 1}. ${icon} ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
+            });
+
+            await ctx.reply(msg,
+                Markup.inlineKeyboard([
+                    Markup.button.callback('❌ Bekor qilish', 'cancel_saved_transactions')
+                ])
+            );
+        }
 
     } catch (error) {
         console.error("Voice processing error:", error);
@@ -1867,60 +1913,6 @@ bot.on('photo', async (ctx) => {
     }
 });
 
-bot.action('confirm_expense', async (ctx) => {
-    const userId = ctx.from.id;
-    const items = pendingTransactions.get(userId);
-
-    if (!items) {
-        return ctx.reply("Sessiya eskirgan. Iltimos qaytadan yuboring.");
-    }
-
-    try {
-        const db = await openDb();
-        const user = await getUser(userId);
-        if (!user) await createUser(userId, ctx.from.username);
-        const dbUser = await getUser(userId);
-
-        for (const item of items) {
-            const table = item.type === 'income' ? 'income' : 'expenses';
-
-            let projectIdToSave = dbUser.current_project_id;
-
-            // LOGIC CHANGE: Income is ALWAYS Global (NULL)
-            if (item.type === 'income') {
-                projectIdToSave = null;
-            } else {
-                // If 'ALL' is selected, where does expense go?
-                // Default to Global (NULL) as per "Boshqa harajatlar will be like expense"
-                if (projectIdToSave === 'ALL') {
-                    projectIdToSave = null;
-                }
-            }
-
-            await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id, category_id) VALUES (?, ?, ?, ?, ?)`,
-                dbUser.id, item.amount, item.description, projectIdToSave, item.categoryId || null
-            );
-        }
-
-        pendingTransactions.delete(userId);
-
-        // FIX: Remove user from salary mode so they return to normal expense mode
-        salaryModeUsers.delete(userId);
-
-        await ctx.editMessageText(`✅ Barcha bitimlar saqlandi!`);
-        await showMainMenu(ctx);
-
-    } catch (e) {
-        console.error(e);
-        ctx.reply("Saqlashda xatolik bo'ldi.");
-    }
-});
-
-bot.action('cancel_expense', async (ctx) => {
-    pendingTransactions.delete(ctx.from.id);
-    salaryModeUsers.delete(ctx.from.id);
-    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { });
-    await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
 // ==========================================
