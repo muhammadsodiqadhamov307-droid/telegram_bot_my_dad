@@ -1646,19 +1646,30 @@ bot.on('voice', async (ctx) => {
            - yuz (100), ming (1,000), million (1,000,000)
            - yarim = 0.5 (half)
            
-           COMPOUND NUMBERS (CRITICAL - ADD, DON'T REPLACE):
-           ✅ "ikki yuz" = 2 × 100 = 200 (NOT 100!)
-           ✅ "uch yuz" = 3 × 100 = 300
-           ✅ "ikki yuz besh ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200
-           ✅ "ikki yuz 5 ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200
-           ✅ "ikki yuzi 5 ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200 (SAME!)
-           ✅ "uch ming besh yuz" = (3 × 1000) + (5 × 100) = 3,000 + 500 = 3,500
-           ✅ "bir million besh yuz ming" = 1,000,000 + 500,000 = 1,500,000
-           ✅ "ikki yarim million" = 2.5 × 1,000,000 = 2,500,000
+           CRITICAL PARSING RULES:
            
-           CRITICAL RULE: Numbers are ADDITIVE in Uzbek!
-           - Parse each component separately and ADD them together
-           - "ikki yuz" means TWO hundreds (200), not one hundred (100)
+           1. HIERARCHICAL MULTIPLICATION (when unit comes AFTER compound):
+              ✅ "ikki yuz besh ming" = (200 + 5) × 1,000 = 205 × 1,000 = 205,000
+              ✅ "ikki yuz besh" ming = 205 thousand = 205,000
+              ✅ "uch yuz olti ming" = (300 + 6) × 1,000 = 306,000
+              ✅ "to'rt yuz yetmish besh ming" = (400 + 70 + 5) × 1,000 = 475,000
+              ✅ "205 ming" = 205,000 (two hundred five thousand)
+              ✅ "ikki yarim million" = 2.5 × 1,000,000 = 2,500,000
+           
+           2. ADDITIVE (when units are SEPARATE):
+              ✅ "ikki yuz ming" = 200,000 (two hundred thousand)
+              ✅ "besh ming" = 5,000 (five thousand)
+              ✅ "ikki yuz ming besh yuz" = 200,000 + 500 = 200,500
+              ✅ "uch ming besh yuz" = 3,000 + 500 = 3,500
+              ✅ "bir million besh yuz ming" = 1,000,000 + 500,000 = 1,500,000
+           
+           KEY DISTINCTION:
+           - "ikki yuz besh ming" = 205,000 (the "besh" modifies "ming")
+           - "ikki yuz ming besh ming" = 205,000 (200,000 + 5,000)
+           - "ikki yuz besh" = 205 (just the number, no unit)
+           
+           WHEN IN DOUBT: If there's a compound number followed immediately by "ming" or "million", 
+           treat it as hierarchical multiplication (multiply the whole compound by the unit).
            
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            
@@ -1790,7 +1801,7 @@ bot.on('photo', async (ctx) => {
 
         let result;
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
             result = await model.generateContent([
                 prompt,
