@@ -2133,8 +2133,8 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         if (!user) return ctx.reply("User not found via ID.");
 
         // Calculate Date Range (Identical logic to getReportData filters)
-        // We can actually use getReportData directly!
-        const data = await getReportData(db, user.id, period, user.current_project_id);
+        // IMPORTANT: Force 'ALL' view for admin to see all projects with their names
+        const data = await getReportData(db, user.id, period, 'ALL');
         const { rows, totalInc, totalExp, periodName, projectName, isHammasi } = data;
 
         if (rows.length === 0) {
