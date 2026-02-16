@@ -364,25 +364,26 @@ bot.action('main_menu', (ctx) => showMainMenu(ctx, true));
 bot.action('refresh_menu', (ctx) => showMainMenu(ctx, true));
 
 // Project Selection Handlers
+// Project Selection Handlers
 bot.action(/select_project_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery(`Obyekt tanlandi`); // Answer first!
     const projectId = ctx.match[1];
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', projectId, ctx.from.id);
-    await ctx.answerCbQuery(`Obyekt tanlandi`);
     await showMainMenu(ctx, true);
 });
 
 bot.action('select_global', async (ctx) => {
+    await ctx.answerCbQuery(`Umumiy hamyon tanlandi`); // Answer first!
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', ctx.from.id);
-    await ctx.answerCbQuery(`Umumiy hamyon tanlandi`);
     await showMainMenu(ctx, true);
 });
 
 bot.action('select_all', async (ctx) => {
+    await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`); // Answer first!
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', 'ALL', ctx.from.id);
-    await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`);
     await showMainMenu(ctx, true);
 });
 
@@ -404,6 +405,7 @@ bot.hears('👷 Ustalar Oyligi', async (ctx) => {
 });
 
 bot.action('salary_mode_start', async (ctx) => {
+    await ctx.answerCbQuery(); // Answer first!
     salaryModeUsers.add(ctx.from.id);
     await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
         parse_mode: 'Markdown',
@@ -413,12 +415,11 @@ bot.action('salary_mode_start', async (ctx) => {
             ]
         }
     });
-    await ctx.answerCbQuery();
 });
 
 bot.action('cancel_salary_mode', async (ctx) => {
+    await ctx.answerCbQuery("Bekor qilindi."); // Answer first!
     salaryModeUsers.delete(ctx.from.id);
-    await ctx.answerCbQuery("Bekor qilindi.");
     await showMainMenu(ctx, true);
 });
 
