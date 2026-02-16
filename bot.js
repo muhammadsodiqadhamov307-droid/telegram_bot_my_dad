@@ -1535,7 +1535,7 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
             // If text, generateContent(prompt + text).
             // If voice buffer, generateContent([prompt, inlineData]).
 
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
             if (type === 'text') {
                 result = await model.generateContent(prompt + "\nUser Input: " + input);
@@ -1637,8 +1637,14 @@ bot.on('voice', async (ctx) => {
         2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
+           - User: "Best uchun 50 ming" -> Description: "Best" (Car Name: Besta/Best)
            - User: "Taksi 20 ming" -> Description: "Taksi"
            - TRANSCRIBE EXACTLY but REMOVE the money part.
+           
+           NORMALIZATION RULES (apply smart matching):
+           - "Benzi", "Benzin", "benzin" -> Always use "Benzin"
+           - "Produkti", "product", "produktlar" -> Always use "Produkti"
+           - Normalize similar spellings to a consistent form
 
         Return STRICT JSON ARRAY:
         [
