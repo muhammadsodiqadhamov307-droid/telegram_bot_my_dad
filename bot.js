@@ -2212,13 +2212,9 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         }
 
 
-        // --- ADMIN KEYS with PDF/Excel Export ---
+        // --- ADMIN KEYS (Export not yet implemented) ---
         const keyboard = {
             inline_keyboard: [
-                [
-                    { text: '📄 PDF', callback_data: `admin_pdf_${period}_${targetUserId}` },
-                    { text: '📊 Excel', callback_data: `admin_excel_${period}_${targetUserId}` }
-                ],
                 [
                     { text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }
                 ]
@@ -2236,60 +2232,6 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         ctx.reply("Admin hisobotida xatolik.");
     }
 }
-
-// Admin PDF Export Handler
-bot.action(/admin_pdf_(.+)_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery("PDF yaratilmoqda...").catch(() => { });
-
-    const period = ctx.match[1];
-    const targetUserId = ctx.match[2];
-
-    try {
-        const db = await openDb();
-        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
-        if (!user) return ctx.reply("User not found.");
-
-        const data = await getReportData(db, user.id, period, user.current_project_id);
-
-        const pdfPath = await generatePDFReport(user, data.rows, data.totalInc, data.totalExp, data.periodName, data.projectName, user.telegram_id);
-
-        await ctx.replyWithDocument({ source: pdfPath }, {
-            caption: `📄 ${user.first_name || 'Foydalanuvchi'} - ${data.periodName} Hisobot`
-        });
-
-        fs.unlinkSync(pdfPath);
-    } catch (e) {
-        console.error("Admin PDF error:", e);
-        await ctx.reply("PDF yaratishda xatolik.");
-    }
-});
-
-// Admin Excel Export Handler
-bot.action(/admin_excel_(.+)_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery("Excel yaratilmoqda...").catch(() => { });
-
-    const period = ctx.match[1];
-    const targetUserId = ctx.match[2];
-
-    try {
-        const db = await openDb();
-        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
-        if (!user) return ctx.reply("User not found.");
-
-        const data = await getReportData(db, user.id, period, user.current_project_id);
-
-        const excelPath = await generateExcelReport(user, data.rows, data.totalInc, data.totalExp, data.periodName, data.projectName, user.telegram_id);
-
-        await ctx.replyWithDocument({ source: excelPath }, {
-            caption: `📊 ${user.first_name || 'Foydalanuvchi'} - ${data.periodName} Hisobot`
-        });
-
-        fs.unlinkSync(excelPath);
-    } catch (e) {
-        console.error("Admin Excel error:", e);
-        await ctx.reply("Excel yaratishda xatolik.");
-    }
-});
 
 // --- Start Server & Bot ---
 app.listen(port, () => {
