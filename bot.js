@@ -366,7 +366,7 @@ bot.action('refresh_menu', (ctx) => showMainMenu(ctx, true));
 // Project Selection Handlers
 // Project Selection Handlers
 bot.action(/select_project_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery(`Obyekt tanlandi`); // Answer first!
+    await ctx.answerCbQuery(`Obyekt tanlandi`).catch(() => { }); // Answer first!
     const projectId = ctx.match[1];
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', projectId, ctx.from.id);
@@ -374,14 +374,14 @@ bot.action(/select_project_(.+)/, async (ctx) => {
 });
 
 bot.action('select_global', async (ctx) => {
-    await ctx.answerCbQuery(`Umumiy hamyon tanlandi`); // Answer first!
+    await ctx.answerCbQuery(`Umumiy hamyon tanlandi`).catch(() => { }); // Answer first!
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = NULL WHERE telegram_id = ?', ctx.from.id);
     await showMainMenu(ctx, true);
 });
 
 bot.action('select_all', async (ctx) => {
-    await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`); // Answer first!
+    await ctx.answerCbQuery(`Hammasi (Umumiy ko'rinish) tanlandi`).catch(() => { }); // Answer first!
     const db = await openDb();
     await db.run('UPDATE users SET current_project_id = ? WHERE telegram_id = ?', 'ALL', ctx.from.id);
     await showMainMenu(ctx, true);
