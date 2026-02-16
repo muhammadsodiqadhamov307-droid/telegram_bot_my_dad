@@ -1771,7 +1771,8 @@ bot.on('voice', async (ctx) => {
                 table: table,
                 type: item.type,
                 description: item.description,
-                amount: item.amount
+                amount: item.amount,
+                projectId: projectIdToSave
             });
         }
 
@@ -1780,8 +1781,17 @@ bot.on('voice', async (ctx) => {
         // Send EACH transaction as a SEPARATE message with its own Bekor qilish button
         for (const txn of savedTransactionIds) {
             const icon = txn.type === 'income' ? '🟢' : '🔴';
+            const typeLabel = txn.type === 'income' ? 'KIRIM' : 'CHIQIM';
+
+            // Get project name
+            let projectName = "Boshqa xarajatlar"; // Default for NULL project_id
+            if (txn.projectId && txn.projectId !== 'ALL') {
+                const project = await db.get('SELECT name FROM projects WHERE id = ?', txn.projectId);
+                if (project) projectName = project.name;
+            }
+
             await ctx.reply(
-                `✅ **Saqlandi!**\n\n${icon} ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
+                `✅ **Saqlandi!**\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm\n📍 Obyekt: ${projectName}`,
                 {
                     parse_mode: 'Markdown',
                     reply_markup: {
