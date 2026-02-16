@@ -1625,7 +1625,11 @@ bot.on('voice', async (ctx) => {
         // Gemini Processing
         const prompt = `
         Analyze this voice message and extract financial transactions.
-        Context: The user is speaking Uzbek.
+        
+        BUSINESS CONTEXT: This is a CONSTRUCTION/BUILDING business. 
+        Most expenses are construction materials, tools, fuel, and worker salaries.
+        
+        Language: The user speaks Uzbek (with Russian/borrowed words for technical terms).
         
         Identify multiple transactions if present.
         For each transaction determine:
@@ -1636,25 +1640,39 @@ bot.on('voice', async (ctx) => {
            - "Berdim", "To'ladim", "Xarajat", "Ketdi" -> type: "expense".
         2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
-           - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
-           - User: "Best uchun 50 ming" -> Description: "Best" (Car Name: Besta/Best)
-           - User: "Taksi 20 ming" -> Description: "Taksi"
-           - TRANSCRIBE EXACTLY but REMOVE the money part.
            
-           NORMALIZATION RULES (apply smart matching):
-           - "Benzi", "Benzin", "benzin" -> Always use "Benzin"
-           - "Produkti", "product", "produktlar" -> Always use "Produkti"
-           - Normalize similar spellings to a consistent form
+           SMART TRANSCRIPTION CORRECTION (CRITICAL):
+           - If transcription seems nonsensical, apply contextual correction
+           - Common construction materials/tools (correct these):
+             * "Balgar qadisk" -> "Balgarka disk" (angle grinder disk)
+             * "Balgarka" (angle grinder - tool name)
+             * "Shpatlifka", "Shpaklifka" -> "Shpatlevka" (putty/spackling)
+             * "Tsement" (cement)
+             * "Pesok" (sand)
+             * "Kirpich" (brick)
+             * "Gruntifka", "Gruntovka" (primer)
+             * "Kraska" (paint)
+             * "Elektrod" (welding electrodes)
+             * "Armatura" (rebar)
+             * "Plitka" (tiles)
+             * "Gips" (gypsum)
+           
+           NORMALIZATION RULES:
+           - "Benzi", "Benzin", "benzin" -> "Benzin"
+           - "Produkti", "product", "produktlar" -> "Produktlar"
+           - Fix obvious transcription errors based on construction context
+           - Keep original spelling for proper names (people, brands)
 
         Return STRICT JSON ARRAY:
         [
             {"type": "income", "amount": 50000, "description": "Oylik"},
-            {"type": "expense", "amount": 20000, "description": "Taksi"}
+            {"type": "expense", "amount": 20000, "description": "Balgarka disk"}
         ]
         
         IMPORTANT:
         - If no numbers found or audio is unclear, return: {"error": "tushunarsiz"}
-        - DO NOT RETURN THE EXAMPLES ("Kamozlarga", "Taksi") if they are not in the input.
+        - DO NOT RETURN THE EXAMPLES if they are not in the input.
+        - ALWAYS apply smart correction for construction materials.
         `;
 
         let result;
