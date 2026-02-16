@@ -2138,13 +2138,20 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         const { rows, totalInc, totalExp, periodName, projectName, isHammasi } = data;
 
         if (rows.length === 0) {
-            const msg = `⚠️ **${user.first_name} - ${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`;
-            const kb = { inline_keyboard: [[{ text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }]] };
-            if (isEdit) return ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: kb });
-            return ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+            const msg = `⚠️ **${user.first_name || 'Foydalanuvchi'}** - **${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`;
+            const keyboard = {
+                inline_keyboard: [
+                    [
+                        { text: '📄 PDF', callback_data: `admin_pdf_${period}_${targetUserId}` },
+                        { text: '📊 Excel', callback_data: `admin_excel_${period}_${targetUserId}` }
+                    ],
+                    [{ text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }]
+                ]
+            }; if (isEdit) return ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: keyboard });
+            return ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
 
-        let message = `👮‍♂️ **ADMIN VIEW**\n👤 **${user.first_name}** | 🏗 **${projectName}**\n🗓 **${periodName} Hisobot**\n\n`;
+        let message = `👮‍♂️ **ADMIN VIEW**\n👤 **${user.first_name || 'Foydalanuvchi'}** | 🏗 **${projectName}**\n🗓 **${periodName} Hisobot**\n\n`;
 
         const salaryCat = await ensureSalaryCategory(user.telegram_id); // Pass telegram_id as expected by ensureSalaryCategory
 
@@ -2226,6 +2233,60 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         ctx.reply("Admin hisobotida xatolik.");
     }
 }
+
+// Admin PDF Export Handler
+bot.action(/admin_pdf_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery("PDF yaratilmoqda...").catch(() => { });
+
+    const period = ctx.match[1];
+    const targetUserId = ctx.match[2];
+
+    try {
+        const db = await openDb();
+        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+        if (!user) return ctx.reply("User not found.");
+
+        const data = await getReportData(db, user.id, period, user.current_project_id);
+
+        const pdfPath = await generatePDFReport(user, data.rows, data.totalInc, data.totalExp, data.periodName, data.projectName, user.telegram_id);
+
+        await ctx.replyWithDocument({ source: pdfPath }, {
+            caption: `📄 ${user.first_name || 'Foydalanuvchi'} - ${data.periodName} Hisobot`
+        });
+
+        fs.unlinkSync(pdfPath);
+    } catch (e) {
+        console.error("Admin PDF error:", e);
+        await ctx.reply("PDF yaratishda xatolik.");
+    }
+});
+
+// Admin Excel Export Handler
+bot.action(/admin_excel_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery("Excel yaratilmoqda...").catch(() => { });
+
+    const period = ctx.match[1];
+    const targetUserId = ctx.match[2];
+
+    try {
+        const db = await openDb();
+        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+        if (!user) return ctx.reply("User not found.");
+
+        const data = await getReportData(db, user.id, period, user.current_project_id);
+
+        const excelPath = await generateExcelReport(user, data.rows, data.totalInc, data.totalExp, data.periodName, data.projectName, user.telegram_id);
+
+        await ctx.replyWithDocument({ source: excelPath }, {
+            caption: `📊 ${user.first_name || 'Foydalanuvchi'} - ${data.periodName} Hisobot`
+        });
+
+        fs.unlinkSync(excelPath);
+    } catch (e) {
+        console.error("Admin Excel error:", e);
+        await ctx.reply("Excel yaratishda xatolik.");
+    }
+});
 
 // --- Start Server & Bot ---
 app.listen(port, () => {
