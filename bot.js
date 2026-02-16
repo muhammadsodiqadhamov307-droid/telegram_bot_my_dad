@@ -90,10 +90,10 @@ async function getUser(telegramId) {
     return db.get('SELECT * FROM users WHERE telegram_id = ?', telegramId);
 }
 
-async function createUser(telegramId, username) {
+async function createUser(telegramId, username, firstName) {
     const db = await openDb();
     // Default status is 'pending' for new users
-    await db.run('INSERT OR IGNORE INTO users (telegram_id, username, status) VALUES (?, ?, ?)', telegramId, username, 'pending');
+    await db.run('INSERT OR IGNORE INTO users (telegram_id, username, first_name, status) VALUES (?, ?, ?, ?)', telegramId, username, firstName, 'pending');
     return getUser(telegramId);
 }
 
@@ -264,7 +264,7 @@ bot.start(async (ctx) => {
     let user = await getUser(ctx.from.id);
 
     if (!user) {
-        user = await createUser(ctx.from.id, ctx.from.username);
+        user = await createUser(ctx.from.id, ctx.from.username, ctx.from.first_name);
 
         // Notify Admin
         const adminId = process.env.ADMIN_ID;

@@ -16,6 +16,7 @@ async function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         telegram_id BIGINT UNIQUE,
         username TEXT,
+        first_name TEXT,
         status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -38,9 +39,11 @@ async function initDb() {
         amount DECIMAL(10, 2),
         description TEXT,
         category_id INTEGER,
+        project_id INTEGER, -- Link to project
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(category_id) REFERENCES categories(id)
+        FOREIGN KEY(category_id) REFERENCES categories(id),
+        FOREIGN KEY(project_id) REFERENCES projects(id)
     );
 
         CREATE TABLE IF NOT EXISTS expenses(
@@ -90,6 +93,11 @@ async function initDb() {
     // User Approval Migration
     try {
         await db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'approved'"); // Default existing users to approved
+    } catch (e) { /* Column likely exists */ }
+
+    // Add first_name column migration
+    try {
+        await db.exec("ALTER TABLE users ADD COLUMN first_name TEXT");
     } catch (e) { /* Column likely exists */ }
 
     // Cleanup unwanted categories
