@@ -1913,6 +1913,33 @@ bot.on('photo', async (ctx) => {
     }
 });
 
+bot.action('cancel_saved_transactions', async (ctx) => {
+    await ctx.answerCbQuery("O'chirilmoqda...").catch(() => { });
+
+    const userId = ctx.from.id;
+    const savedTransactions = pendingTransactions.get(userId);
+
+    if (!savedTransactions) {
+        return ctx.editMessageText("❌ Sessiya eskirgan.");
+    }
+
+    try {
+        const db = await openDb();
+
+        // Delete each saved transaction from database
+        for (const item of savedTransactions) {
+            await db.run(`DELETE FROM ${item.table} WHERE id = ?`, item.id);
+        }
+
+        pendingTransactions.delete(userId);
+        salaryModeUsers.delete(userId);
+
+        await ctx.editMessageText(`❌ ${savedTransactions.length} ta bitim o'chirildi.`);
+
+    } catch (e) {
+        console.error("Delete error:", e);
+        await ctx.editMessageText("❌ O'chirishda xatolik yuz berdi.");
+    }
 });
 
 // ==========================================
