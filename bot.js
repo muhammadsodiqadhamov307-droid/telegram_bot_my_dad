@@ -1296,7 +1296,11 @@ async function generateProfessionalPDF(ctx, period) {
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
             await ctx.replyWithDocument({ source: pdfData, filename: `Hisobot_${period}.pdf` });
-            await showMainMenu(ctx, true);
+
+            // Don't show main menu if this is an admin export
+            if (!ctx._isAdminExport) {
+                await showMainMenu(ctx, true);
+            }
         });
 
         // --- PDF DESIGN ---
@@ -2261,11 +2265,15 @@ bot.action(/admin_pdf_(.+)_(.+)/, async (ctx) => {
         // Overwrite ctx.from.id temporarily (hacky but effective for this structure)
         ctx.from.id = parseInt(targetUserId);
 
+        // Add a flag to prevent showMainMenu from being called
+        ctx._isAdminExport = true;
+
         try {
             await generateProfessionalPDF(ctx, period);
         } finally {
             // Restore original ID just in case
             ctx.from.id = originalFromId;
+            delete ctx._isAdminExport;
         }
 
     } catch (e) {
@@ -2290,10 +2298,14 @@ bot.action(/admin_excel_(.+)_(.+)/, async (ctx) => {
         const originalFromId = ctx.from.id;
         ctx.from.id = parseInt(targetUserId);
 
+        // Add a flag to prevent showMainMenu from being called
+        ctx._isAdminExport = true;
+
         try {
             await generateExcelReport(ctx, period);
         } finally {
             ctx.from.id = originalFromId;
+            delete ctx._isAdminExport;
         }
 
     } catch (e) {
