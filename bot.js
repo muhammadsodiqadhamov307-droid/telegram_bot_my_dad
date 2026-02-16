@@ -1638,7 +1638,28 @@ bot.on('voice', async (ctx) => {
            - "Oldim" (Received/Took) -> type: "income" (e.g. "Bahodirdan oldim").
            - "Sotib oldim" (Bought) -> type: "expense".
            - "Berdim", "To'ladim", "Xarajat", "Ketdi" -> type: "expense".
-        2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
+        2. "amount": numeric value (integer). 
+           
+           UZBEK NUMBER PARSING (BE EXTREMELY CAREFUL):
+           - bir (1), ikki (2), uch (3), to'rt (4), besh (5), olti (6), yetti (7), sakkiz (8), to'qqiz (9), o'n (10)
+           - yigirma (20), o'ttiz (30), qirq (40), ellik (50), oltmish (60), yetmish (70), sakson (80), to'qson (90)
+           - yuz (100), ming (1,000), million (1,000,000)
+           - yarim = 0.5 (half)
+           
+           COMPOUND NUMBERS (CRITICAL - ADD, DON'T REPLACE):
+           ✅ "ikki yuz" = 2 × 100 = 200 (NOT 100!)
+           ✅ "uch yuz" = 3 × 100 = 300
+           ✅ "ikki yuz besh ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200
+           ✅ "ikki yuz 5 ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200
+           ✅ "ikki yuzi 5 ming" = (2 × 100) + (5 × 1000) = 200 + 5,000 = 5,200 (SAME!)
+           ✅ "uch ming besh yuz" = (3 × 1000) + (5 × 100) = 3,000 + 500 = 3,500
+           ✅ "bir million besh yuz ming" = 1,000,000 + 500,000 = 1,500,000
+           ✅ "ikki yarim million" = 2.5 × 1,000,000 = 2,500,000
+           
+           CRITICAL RULE: Numbers are ADDITIVE in Uzbek!
+           - Parse each component separately and ADD them together
+           - "ikki yuz" means TWO hundreds (200), not one hundred (100)
+           
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            
            SMART TRANSCRIPTION CORRECTION (CRITICAL):
@@ -1882,6 +1903,13 @@ bot.action('confirm_expense', async (ctx) => {
         console.error(e);
         ctx.reply("Saqlashda xatolik bo'ldi.");
     }
+});
+
+bot.action('cancel_expense', async (ctx) => {
+    pendingTransactions.delete(ctx.from.id);
+    salaryModeUsers.delete(ctx.from.id);
+    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { });
+    await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
 // ==========================================
