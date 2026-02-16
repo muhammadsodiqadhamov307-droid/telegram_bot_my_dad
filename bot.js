@@ -1791,7 +1791,7 @@ bot.on('voice', async (ctx) => {
             }
 
             await ctx.reply(
-                `✅ **Saqlandi!**\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm\n📍 Obyekt: ${projectName}`,
+                `✅ **Saqlandi!**\n🏗️ Obyekt: ${projectName}\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
                 {
                     parse_mode: 'Markdown',
                     reply_markup: {
