@@ -1636,7 +1636,6 @@ bot.on('voice', async (ctx) => {
         2. "amount": numeric value (integer). Handle "yarim" (half/0.5). e.g. "ikki yarim million" = 2,500,000.
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            - User: "Kamozlarga 3 million 650 ming" -> Description: "Kamozlarga"
-           - User: "Best uchun 50 ming" -> Description: "Best" (Car Name: Besta/Best)
            - User: "Taksi 20 ming" -> Description: "Taksi"
            - TRANSCRIBE EXACTLY but REMOVE the money part.
 
@@ -1864,6 +1863,201 @@ bot.action('cancel_expense', async (ctx) => {
     salaryModeUsers.delete(ctx.from.id); // FIX: Also exit mode on cancel
     await ctx.editMessageText("❌ Bekor qilindi.");
 });
+
+// ==========================================
+// 👑 ADMIN PANEL IMPLEMENTATION
+// ==========================================
+
+// 1. /admin Command - List All Users
+bot.command('admin', async (ctx) => {
+    const adminId = process.env.ADMIN_ID;
+    if (String(ctx.from.id) !== String(adminId)) {
+        return ctx.reply("⛔️ Siz admin emassiz.");
+    }
+
+    const db = await openDb();
+    const users = await db.all("SELECT id, telegram_id, first_name, username FROM users WHERE status = 'approved'");
+
+    if (users.length === 0) return ctx.reply("📂 Foydalanuvchilar topilmadi.");
+
+    const buttons = users.map(u => ([{
+        text: `👤 ${u.first_name} (@${u.username || 'no_user'})`,
+        callback_data: `admin_view_user_${u.telegram_id}`
+    }]));
+
+    buttons.push([{ text: '❌ Yopish', callback_data: 'delete_message' }]);
+
+    ctx.reply("👥 **Foydalanuvchilar Ro'yxati:**\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: buttons }
+    });
+});
+
+bot.action('delete_message', (ctx) => ctx.deleteMessage());
+
+// 2. Admin User View - Show Report Options
+bot.action(/admin_view_user_(.+)/, async (ctx) => {
+    const targetUserId = ctx.match[1];
+    const db = await openDb();
+    const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+
+    if (!user) return ctx.answerCbQuery("Foydalanuvchi topilmadi.");
+
+    // Determine current project context for title (display only)
+    let contextTitle = "🌐 Boshqa xarajatlar";
+    if (user.current_project_id) {
+        const p = await db.get('SELECT name FROM projects WHERE id = ?', user.current_project_id);
+        if (p) contextTitle = `🏗 ${p.name}`;
+    }
+
+    const text = `👤 **Foydalanuvchi:** ${user.first_name} (@${user.username})\n` +
+        `📍 **Hozirgi holat:** ${contextTitle}\n\n` +
+        `Qaysi davr uchun hisobot kerak?`;
+
+    const keyboard = {
+        inline_keyboard: [
+            [
+                { text: '📅 Bugun', callback_data: `admin_rep_today_${targetUserId}` },
+                { text: '⏮ Kecha', callback_data: `admin_rep_yesterday_${targetUserId}` }
+            ],
+            [
+                { text: '🗓 Shu hafta', callback_data: `admin_rep_week_${targetUserId}` },
+                { text: '📆 Shu oy', callback_data: `admin_rep_month_${targetUserId}` }
+            ],
+            [
+                { text: '🔙 Orqaga', callback_data: 'admin_list_users' }
+            ]
+        ]
+    };
+
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+});
+
+bot.action('admin_list_users', async (ctx) => {
+    // Re-run /admin logic via callback
+    const db = await openDb();
+    const users = await db.all("SELECT id, telegram_id, first_name, username FROM users WHERE status = 'approved'");
+    const buttons = users.map(u => ([{
+        text: `👤 ${u.first_name} (@${u.username || 'no_user'})`,
+        callback_data: `admin_view_user_${u.telegram_id}`
+    }]));
+    buttons.push([{ text: '❌ Yopish', callback_data: 'delete_message' }]);
+
+    await ctx.editMessageText("👥 **Foydalanuvchilar Ro'yxati:**\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: buttons }
+    });
+});
+
+// 3. Admin Report Handler & Generator
+bot.action(/admin_rep_(.+)_(.+)/, async (ctx) => {
+    const period = ctx.match[1]; // today, yesterday, week, month
+    const targetUserId = ctx.match[2];
+
+    await sendAdminReportSummary(ctx, period, targetUserId, true);
+});
+
+// Admin-specific Report Generator (Cloned & Adapted from sendReportSummary)
+async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false) {
+    try {
+        const db = await openDb();
+        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+        if (!user) return ctx.reply("User not found via ID.");
+
+        // Calculate Date Range (Identical logic to getReportData filters)
+        // We can actually use getReportData directly!
+        const data = await getReportData(db, user.id, period, user.current_project_id);
+        const { rows, totalInc, totalExp, periodName, projectName, isHammasi } = data;
+
+        if (rows.length === 0) {
+            const msg = `⚠️ **${user.first_name} - ${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`;
+            const kb = { inline_keyboard: [[{ text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }]] };
+            if (isEdit) return ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: kb });
+            return ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        }
+
+        let message = `👮‍♂️ **ADMIN VIEW**\n👤 **${user.first_name}** | 🏗 **${projectName}**\n🗓 **${periodName} Hisobot**\n\n`;
+
+        const salaryCat = await ensureSalaryCategory(user.telegram_id); // Pass telegram_id as expected by ensureSalaryCategory
+
+        // --- RENDER LOGIC (Copied & Minified from sendReportSummary) ---
+        if (isHammasi) {
+            const Incomes = rows.filter(r => r.type === 'income');
+            if (Incomes.length > 0) {
+                message += `📥 **KIRIMLAR:**\n`;
+                Incomes.forEach(r => message += `🟢 ${r.description}: +${r.amount.toLocaleString()}\n`);
+                message += `\n----------------\n`;
+            }
+            const projects = await db.all('SELECT id, name FROM projects WHERE user_id = ?', user.id);
+            const projectMap = {};
+            projects.forEach(p => projectMap[p.id] = p.name);
+            projectMap['null'] = "Boshqa xarajatlar";
+
+            const Expenses = rows.filter(r => r.type === 'expense');
+            const tasksByProject = {};
+            Expenses.forEach(r => {
+                const pid = r.project_id || 'null';
+                if (!tasksByProject[pid]) tasksByProject[pid] = [];
+                tasksByProject[pid].push(r);
+            });
+
+            Object.keys(tasksByProject).forEach(pid => {
+                const pName = projectMap[pid] || "Noma'lum";
+                message += `🏗 **${pName}**:\n`;
+                let pTotal = 0;
+                const pExpenses = tasksByProject[pid];
+                const pSalaries = pExpenses.filter(r => r.category_id === salaryCat.id);
+                const pRegular = pExpenses.filter(r => r.category_id !== salaryCat.id);
+
+                if (pRegular.length > 0) pRegular.forEach(r => { message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`; pTotal += r.amount; });
+                if (pSalaries.length > 0) {
+                    message += `   👷 **Ustalar:**\n`;
+                    pSalaries.forEach(r => { message += `   🔸 ${r.description}: -${r.amount.toLocaleString()}\n`; pTotal += r.amount; });
+                }
+                message += `   Jami: -${pTotal.toLocaleString()}\n----------------\n`;
+            });
+
+            const balance = totalInc - totalExp;
+            message += `\n💰 **JAMI BALANS:**\n🟢 +${totalInc.toLocaleString()}\n🔴 -${totalExp.toLocaleString()}\n💵 **${balance.toLocaleString()}**`;
+
+        } else {
+            // Project/Global View
+            const salaries = rows.filter(r => r.category_id === salaryCat.id);
+            const regular = rows.filter(r => r.category_id !== salaryCat.id);
+
+            if (regular.length > 0) {
+                message += `🛠 **Xarajatlar:**\n`;
+                regular.forEach(r => message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`);
+            }
+            if (salaries.length > 0) {
+                message += `\n👷 **Ustalar:**\n`;
+                salaries.forEach(r => message += `🔸 ${r.description}: -${r.amount.toLocaleString()}\n`);
+            }
+            message += `\n────────────────\nJami Chiqim: -${totalExp.toLocaleString()} so'm`;
+        }
+
+        // --- ADMIN KEYS ---
+        // Note: PDF/Excel generation for admin not yet implemented fully (needs admin_download handlers)
+        // For now, just View + Back
+        const keyboard = {
+            inline_keyboard: [
+                [
+                    { text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }
+                ]
+            ]
+        };
+
+        if (isEdit) {
+            await ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+        } else {
+            await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+        }
+
+    } catch (e) {
+        console.error("Admin Report Error:", e);
+        ctx.reply("Admin hisobotida xatolik.");
+    }
+}
 
 // --- Start Server & Bot ---
 app.listen(port, () => {
