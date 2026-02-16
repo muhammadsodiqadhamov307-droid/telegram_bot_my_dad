@@ -2028,13 +2028,18 @@ bot.action(/admin_view_user_(.+)/, async (ctx) => {
 
     // Determine current project context for title (display only)
     let contextTitle = "🌐 Boshqa xarajatlar";
-    if (user.current_project_id) {
+    if (user.current_project_id && user.current_project_id !== 'ALL') {
         const p = await db.get('SELECT name FROM projects WHERE id = ?', user.current_project_id);
         if (p) contextTitle = `🏗 ${p.name}`;
+    } else if (user.current_project_id === 'ALL') {
+        contextTitle = "🌐 Hammasi (Umumiy)";
     }
 
-    const text = `👤 **Foydalanuvchi:** ${user.first_name} (@${user.username})\n` +
-        `📍 **Hozirgi holat:** ${contextTitle}\n\n` +
+    const projectCount = await db.get("SELECT COUNT(*) as count FROM projects WHERE user_id = ?", user.id);
+
+    const text = `👤 **Foydalanuvchi:** ${user.first_name || 'Foydalanuvchi'} (@${user.username || 'no_user'})\n` +
+        `📍 **Hozirgi holat:** ${contextTitle}\n` +
+        `💰 **Jami Obyektlar:** ${projectCount.count} ta\n\n` +
         `Qaysi davr uchun hisobot kerak?`;
 
     const keyboard = {
@@ -2048,7 +2053,7 @@ bot.action(/admin_view_user_(.+)/, async (ctx) => {
                 { text: '📆 Shu oy', callback_data: `admin_rep_month_${targetUserId}` }
             ],
             [
-                { text: '🔙 Orqaga', callback_data: 'admin_list_users' }
+                { text: '🔙 Orqaga', callback_data: 'admin_dashboard' }
             ]
         ]
     };
