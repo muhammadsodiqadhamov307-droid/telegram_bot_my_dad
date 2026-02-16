@@ -1660,6 +1660,7 @@ bot.on('voice', async (ctx) => {
            NORMALIZATION RULES:
            - "Benzi", "Benzin", "benzin" -> "Benzin"
            - "Produkti", "product", "produktlar" -> "Produktlar"
+           - "Salyarka", "Salarka", "Salar", "salarka" -> "Salyarka" (diesel fuel)
            - Fix obvious transcription errors based on construction context
            - Keep original spelling for proper names (people, brands)
 
