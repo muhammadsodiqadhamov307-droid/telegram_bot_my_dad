@@ -1777,29 +1777,24 @@ bot.on('voice', async (ctx) => {
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
 
-        // Single transaction: Just show success message (no buttons)
-        if (data.length === 1) {
-            const item = data[0];
-            const icon = item.type === 'income' ? '🟢' : '🔴';
-            await ctx.reply(`✅ **Saqlandi!**\n\n${icon} ${item.description} - ${item.amount.toLocaleString()} so'm`, {
-                parse_mode: 'Markdown'
-            });
-            await showMainMenu(ctx);
-        } else {
-            // Multiple transactions: Show list with Bekor qilish button
-            pendingTransactions.set(ctx.from.id, savedTransactionIds); // Store IDs for deletion
-
-            let msg = "✅ **Quyidagi bitimlar saqlandi:**\n\n";
-            savedTransactionIds.forEach((item, index) => {
-                const icon = item.type === 'income' ? '🟢' : '🔴';
-                msg += `${index + 1}. ${icon} ${item.description} - ${item.amount.toLocaleString()} so'm\n`;
-            });
-
-            await ctx.reply(msg,
-                Markup.inlineKeyboard([
-                    Markup.button.callback('❌ Bekor qilish', 'cancel_saved_transactions')
-                ])
+        // Send EACH transaction as a SEPARATE message with its own Bekor qilish button
+        for (const txn of savedTransactionIds) {
+            const icon = txn.type === 'income' ? '🟢' : '🔴';
+            await ctx.reply(
+                `✅ **Saqlandi!**\n\n${icon} ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '❌ Bekor qilish', callback_data: `cancel_txn_${txn.id}_${txn.table}` }
+                        ]]
+                    }
+                }
             );
+        }
+
+        if (savedTransactionIds.length > 0) {
+            await showMainMenu(ctx);
         }
 
     } catch (error) {
@@ -1913,28 +1908,19 @@ bot.on('photo', async (ctx) => {
     }
 });
 
-bot.action('cancel_saved_transactions', async (ctx) => {
-    await ctx.answerCbQuery("O'chirilmoqda...").catch(() => { });
+bot.action(/cancel_txn_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbCbQuery("O'chirilmoqda...").catch(() => { });
 
-    const userId = ctx.from.id;
-    const savedTransactions = pendingTransactions.get(userId);
-
-    if (!savedTransactions) {
-        return ctx.editMessageText("❌ Sessiya eskirgan.");
-    }
+    const transactionId = ctx.match[1];
+    const tableName = ctx.match[2];
 
     try {
         const db = await openDb();
 
-        // Delete each saved transaction from database
-        for (const item of savedTransactions) {
-            await db.run(`DELETE FROM ${item.table} WHERE id = ?`, item.id);
-        }
+        // Delete the specific transaction from database
+        await db.run(`DELETE FROM ${tableName} WHERE id = ?`, transactionId);
 
-        pendingTransactions.delete(userId);
-        salaryModeUsers.delete(userId);
-
-        await ctx.editMessageText(`❌ ${savedTransactions.length} ta bitim o'chirildi.`);
+        await ctx.editMessageText("❌ Bitim o'chirildi.");
 
     } catch (e) {
         console.error("Delete error:", e);
