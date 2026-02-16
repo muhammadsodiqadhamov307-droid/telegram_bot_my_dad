@@ -405,7 +405,7 @@ bot.hears('👷 Ustalar Oyligi', async (ctx) => {
 });
 
 bot.action('salary_mode_start', async (ctx) => {
-    await ctx.answerCbQuery(); // Answer first!
+    await ctx.answerCbQuery().catch(() => { }); // Answer first!
     salaryModeUsers.add(ctx.from.id);
     await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
         parse_mode: 'Markdown',
@@ -418,7 +418,7 @@ bot.action('salary_mode_start', async (ctx) => {
 });
 
 bot.action('cancel_salary_mode', async (ctx) => {
-    await ctx.answerCbQuery("Bekor qilindi."); // Answer first!
+    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { }); // Answer first!
     salaryModeUsers.delete(ctx.from.id);
     await showMainMenu(ctx, true);
 });
@@ -1859,9 +1859,43 @@ bot.action('confirm_expense', async (ctx) => {
     }
 });
 
+// 2. Admin User View - Show Report Options
+bot.action(/admin_view_user_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery().catch(() => { });
+    const targetUserId = ctx.match[1];
+    //...
+});
+
+bot.action('admin_list_users', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => { });
+    //...
+});
+
+bot.action(/admin_rep_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery().catch(() => { });
+    const period = ctx.match[1];
+    //...
+});
+
+bot.action('confirm_expense', async (ctx) => {
+    const userId = ctx.from.id;
+    const items = pendingTransactions.get(userId);
+
+    if (!items) {
+        await ctx.answerCbQuery("Sessiya eskirgan.").catch(() => { });
+        return ctx.reply("Sessiya eskirgan. Iltimos qaytadan yuboring.");
+    }
+    await ctx.answerCbQuery().catch(() => { });
+
+    try {
+        const db = await openDb();
+        //...
+    });
+
 bot.action('cancel_expense', async (ctx) => {
     pendingTransactions.delete(ctx.from.id);
-    salaryModeUsers.delete(ctx.from.id); // FIX: Also exit mode on cancel
+    salaryModeUsers.delete(ctx.from.id);
+    await ctx.answerCbQuery("Bekor qilindi.").catch(() => { });
     await ctx.editMessageText("❌ Bekor qilindi.");
 });
 
