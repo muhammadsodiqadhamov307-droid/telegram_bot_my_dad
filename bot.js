@@ -1909,7 +1909,7 @@ bot.on('photo', async (ctx) => {
 });
 
 bot.action(/cancel_txn_(.+)_(.+)/, async (ctx) => {
-    await ctx.answerCbCbQuery("O'chirilmoqda...").catch(() => { });
+    await ctx.answerCbQuery("O'chirilmoqda...").catch(() => { });
 
     const transactionId = ctx.match[1];
     const tableName = ctx.match[2];
