@@ -2212,9 +2212,13 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         }
 
 
-        // --- ADMIN KEYS (Export not yet implemented) ---
+        // --- ADMIN KEYS with PDF/Excel Export ---
         const keyboard = {
             inline_keyboard: [
+                [
+                    { text: '📄 PDF', callback_data: `admin_pdf_${period}_${targetUserId}` },
+                    { text: '📊 Excel', callback_data: `admin_excel_${period}_${targetUserId}` }
+                ],
                 [
                     { text: '🔙 Orqaga', callback_data: `admin_view_user_${targetUserId}` }
                 ]
@@ -2232,6 +2236,48 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         ctx.reply("Admin hisobotida xatolik.");
     }
 }
+
+// Admin PDF Export
+bot.action(/admin_pdf_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery("📄 PDF tayyorlanmoqda...").catch(() => { });
+
+    const period = ctx.match[1];
+    const targetUserId = ctx.match[2];
+
+    try {
+        const db = await openDb();
+        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+        if (!user) return ctx.reply("User not found.");
+
+        // Call existing PDF function with modified context
+        const modifiedCtx = { ...ctx, from: { id: parseInt(targetUserId) } };
+        await generateProfessionalPDF(modifiedCtx, period);
+    } catch (e) {
+        console.error("Admin PDF error:", e);
+        await ctx.reply("PDF yaratishda xatolik.");
+    }
+});
+
+// Admin Excel Export
+bot.action(/admin_excel_(.+)_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery("📊 Excel tayyorlanmoqda...").catch(() => { });
+
+    const period = ctx.match[1];
+    const targetUserId = ctx.match[2];
+
+    try {
+        const db = await openDb();
+        const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
+        if (!user) return ctx.reply("User not found.");
+
+        // Call existing Excel function with modified context
+        const modifiedCtx = { ...ctx, from: { id: parseInt(targetUserId) } };
+        await generateExcelReport(modifiedCtx, period);
+    } catch (e) {
+        console.error("Admin Excel error:", e);
+        await ctx.reply("Excel yaratishda xatolik.");
+    }
+});
 
 // --- Start Server & Bot ---
 app.listen(port, () => {
