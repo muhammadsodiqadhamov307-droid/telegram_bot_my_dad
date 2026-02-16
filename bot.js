@@ -1881,7 +1881,7 @@ bot.command('admin', async (ctx) => {
     if (users.length === 0) return ctx.reply("📂 Foydalanuvchilar topilmadi.");
 
     const buttons = users.map(u => ([{
-        text: `👤 ${u.first_name} (@${u.username || 'no_user'})`,
+        text: `👤 ${u.first_name || 'Foydalanuvchi'} (@${u.username || 'no_user'})`,
         callback_data: `admin_view_user_${u.telegram_id}`
     }]));
 
