@@ -2249,9 +2249,20 @@ bot.action(/admin_pdf_(.+)_(.+)/, async (ctx) => {
         const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
         if (!user) return ctx.reply("User not found.");
 
-        // Call existing PDF function with modified context
-        const modifiedCtx = { ...ctx, from: { id: parseInt(targetUserId) } };
-        await generateProfessionalPDF(modifiedCtx, period);
+        // METHOD 1: Temporarily mock ctx.from.id for the function call
+        // We create a proxy or modified object that HAS the methods
+        const originalFromId = ctx.from.id;
+
+        // Overwrite ctx.from.id temporarily (hacky but effective for this structure)
+        ctx.from.id = parseInt(targetUserId);
+
+        try {
+            await generateProfessionalPDF(ctx, period);
+        } finally {
+            // Restore original ID just in case
+            ctx.from.id = originalFromId;
+        }
+
     } catch (e) {
         console.error("Admin PDF error:", e);
         await ctx.reply("PDF yaratishda xatolik.");
@@ -2270,9 +2281,16 @@ bot.action(/admin_excel_(.+)_(.+)/, async (ctx) => {
         const user = await db.get("SELECT * FROM users WHERE telegram_id = ?", targetUserId);
         if (!user) return ctx.reply("User not found.");
 
-        // Call existing Excel function with modified context
-        const modifiedCtx = { ...ctx, from: { id: parseInt(targetUserId) } };
-        await generateExcelReport(modifiedCtx, period);
+        // METHOD 1: Temporarily mock ctx.from.id for the function call
+        const originalFromId = ctx.from.id;
+        ctx.from.id = parseInt(targetUserId);
+
+        try {
+            await generateExcelReport(ctx, period);
+        } finally {
+            ctx.from.id = originalFromId;
+        }
+
     } catch (e) {
         console.error("Admin Excel error:", e);
         await ctx.reply("Excel yaratishda xatolik.");
