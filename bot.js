@@ -213,6 +213,11 @@ async function showMainMenu(ctx, isEdit = false) {
     ]);
     inlineKeyboard.push([{ text: "📊 Hisobotlar", callback_data: 'reports_menu' }]);
 
+    // Admin button (only visible to admin)
+    if (process.env.ADMIN_ID && ctx.from.id.toString() === process.env.ADMIN_ID) {
+        inlineKeyboard.push([{ text: "👑 Admin", callback_data: 'admin_dashboard' }]);
+    }
+
     // ... (rest of menu)
 
     // ...
@@ -1893,24 +1898,68 @@ bot.on('photo', async (ctx) => {
             return ctx.reply("Chekdan summa topilmadi.");
         }
 
-        pendingTransactions.set(ctx.from.id, data);
+        // Auto-save transactions immediately (same logic as voice handler)
+        const db = await openDb();
+        const user = await getUser(ctx.from.id);
+        if (!user) await createUser(ctx.from.id, ctx.from.username);
+        const dbUser = await getUser(ctx.from.id);
 
-        let msg = "🧾 **Chek Tahlili:**\n\n";
-        let jami = 0;
-        data.forEach((item, index) => {
-            const amt = Number(item.amount);
-            jami += amt;
-            msg += `${index + 1}. 🔴 ${item.description || 'Noma\'lum'} - ${amt.toLocaleString()} so'm\n`;
-        });
-        msg += `\n**JAMI:** ${jami.toLocaleString()} so'm`;
+        const savedTransactionIds = [];
+
+        for (const item of data) {
+            const table = 'expenses'; // Photos are always expenses
+
+            let projectIdToSave = dbUser.current_project_id;
+
+            // If 'ALL' is selected, expense goes to Global (NULL)
+            if (projectIdToSave === 'ALL') {
+                projectIdToSave = null;
+            }
+
+            const result = await db.run(`INSERT INTO ${table} (user_id, amount, description, project_id, category_id) VALUES (?, ?, ?, ?, ?)`,
+                dbUser.id, item.amount, item.description || 'Chek', projectIdToSave, null
+            );
+
+            savedTransactionIds.push({
+                id: result.lastID,
+                table: table,
+                type: 'expense',
+                description: item.description || 'Chek',
+                amount: item.amount,
+                projectId: projectIdToSave
+            });
+        }
 
         await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
-        await ctx.reply(msg,
-            Markup.inlineKeyboard([
-                Markup.button.callback('✅ Tasdiqlash', 'confirm_expense'),
-                Markup.button.callback('❌ Bekor qilish', 'cancel_expense')
-            ])
-        );
+
+        // Send EACH transaction as a SEPARATE message with its own Bekor qilish button
+        for (const txn of savedTransactionIds) {
+            const icon = '🔴';
+            const typeLabel = 'CHIQIM';
+
+            // Get project name
+            let projectName = "Boshqa xarajatlar"; // Default for NULL project_id
+            if (txn.projectId && txn.projectId !== 'ALL') {
+                const project = await db.get('SELECT name FROM projects WHERE id = ?', txn.projectId);
+                if (project) projectName = project.name;
+            }
+
+            await ctx.reply(
+                `✅ **Saqlandi!**\n🏗️ Obyekt: ${projectName}\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '❌ Bekor qilish', callback_data: `cancel_txn_${txn.id}_${txn.table}` }
+                        ]]
+                    }
+                }
+            );
+        }
+
+        if (savedTransactionIds.length > 0) {
+            await showMainMenu(ctx);
+        }
 
     } catch (e) {
         console.error("Photo handler error:", e);
@@ -2005,6 +2054,51 @@ bot.action(/admin_view_user_(.+)/, async (ctx) => {
     };
 
     await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+});
+
+// Admin Dashboard - Show all users with their projects
+bot.action('admin_dashboard', async (ctx) => {
+    await ctx.answerCbQuery("Admin panelga xush kelibsiz!").catch(() => { });
+
+    try {
+        const db = await openDb();
+        const users = await db.all("SELECT id, telegram_id, first_name, username FROM users WHERE status = 'approved' ORDER BY first_name");
+
+        if (users.length === 0) {
+            return ctx.editMessageText("👥 Hech qanday tasdiqlangan foydalanuvchi topilmadi.");
+        }
+
+        // For each user, get their project count
+        const userButtons = [];
+        for (const u of users) {
+            const projectCount = await db.get("SELECT COUNT(*) as count FROM projects WHERE user_id = ?", u.id);
+            const projects = projectCount.count || 0;
+            userButtons.push([{
+                text: `👤 ${u.first_name} (@${u.username || 'no_user'}) - ${projects} obyekt`,
+                callback_data: `admin_view_user_${u.telegram_id}`
+            }]);
+        }
+
+        userButtons.push([{ text: '🔙 Orqaga', callback_data: 'close_admin' }]);
+
+        await ctx.editMessageText(
+            "👑 **Admin Panel**\n\n👥 **Barcha foydalanuvchilar:**\nFoydalanuvchini tanlang:",
+            {
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: userButtons }
+            }
+        );
+    } catch (e) {
+        console.error("Admin dashboard error:", e);
+        await ctx.editMessageText("❌ Xatolik yuz berdi.");
+    }
+});
+
+// Close admin panel
+bot.action('close_admin', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => { });
+    await ctx.deleteMessage().catch(() => { });
+    await showMainMenu(ctx);
 });
 
 bot.action('admin_list_users', async (ctx) => {
