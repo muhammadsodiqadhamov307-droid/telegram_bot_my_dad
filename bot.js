@@ -1683,25 +1683,21 @@ bot.on('voice', async (ctx) => {
         3. "description": Extract the item name ONLY. Remove any numbers or prices from the text.
            
            SMART TRANSCRIPTION CORRECTION (CRITICAL):
-           - If transcription seems nonsensical, apply contextual correction
-           - Common construction materials/tools (correct these):
-             * "Balgar qadisk" -> "Balgarka disk" (angle grinder disk)
-             * "Balgarka" (angle grinder - tool name)
-             * "Shpatlifka", "Shpaklifka" -> "Shpatlevka" (putty/spackling)
-             * "Tsement" (cement)
-             * "Pesok" (sand)
-             * "Kirpich" (brick)
-             * "Gruntifka", "Gruntovka" (primer)
-             * "Kraska" (paint)
-             * "Elektrod" (welding electrodes)
-             * "Armatura" (rebar)
-             * "Plitka" (tiles)
-             * "Gips" (gypsum)
+           - Only correct IF and ONLY IF the word is a clear phonetic match to a common construction term.
+           - User input takes precedence: If the user says "Turba", write "Turba". Do NOT change it to "Benzin" or "Truba" unless you are 100% sure.
+           - Common terms to standardize (ONLY if phonetically similar):
+             * "Balgar qadisk" -> "Balgarka disk"
+             * "Shpatlifka" -> "Shpatlevka"
+             * "Gruntifka" -> "Gruntovka"
+           
+           - IF THE WORD IS UNKNOWN or does not match construction terms, WRITE IT EXACTLY AS HEARD.
+           - DO NOT GUESS or force a match to a known material if it sounds different.
            
            NORMALIZATION RULES:
            - "Benzi", "Benzin", "benzin" -> "Benzin"
            - "Produkti", "product", "produktlar" -> "Produktlar"
            - "Salyarka", "Salarka", "Salar", "salarka" -> "Salyarka" (diesel fuel)
+           - "Truba", "Turba", "truba", "turba" -> "Truba" (Pipe) - DO NOT confuse with "Benzin"
            - Fix obvious transcription errors based on construction context
            - Keep original spelling for proper names (people, brands)
 
@@ -1715,6 +1711,7 @@ bot.on('voice', async (ctx) => {
         - If no numbers found or audio is unclear, return: {"error": "tushunarsiz"}
         - DO NOT RETURN THE EXAMPLES if they are not in the input.
         - ALWAYS apply smart correction for construction materials.
+        - PRIORITIZE TRANSCRIPT OVER EXAMPLES. If user says something different from examples, use what they said.
         `;
 
         let result;
