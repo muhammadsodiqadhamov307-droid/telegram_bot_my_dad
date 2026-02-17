@@ -55,7 +55,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Helper: Generate Content (Single Key)
 async function generateContentWithRotation(prompt, buffer) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); // Using standard flash model
+        const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview", thinkingLevel: "minimal" }); // Using standard flash model
 
         const generatePromise = model.generateContent([
             prompt,
@@ -1544,7 +1544,7 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
             // If text, generateContent(prompt + text).
             // If voice buffer, generateContent([prompt, inlineData]).
 
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview", thinkingLevel: "minimal" });
 
             if (type === 'text') {
                 result = await model.generateContent(prompt + "\nUser Input: " + input);
@@ -1858,7 +1858,7 @@ bot.on('photo', async (ctx) => {
 
         let result;
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview", thinkingLevel: "minimal" });
 
             result = await model.generateContent([
                 prompt,
