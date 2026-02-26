@@ -23,6 +23,15 @@ const port = process.env.PORT || 3000;
 
 import apiRoutes from './api_routes.js';
 
+// --- Process Level Error Handling (Prevents PM2 crashes) ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for audio data
@@ -56,10 +65,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Helper: Generate Content (Single Key)
 async function generateContentWithRotation(prompt, buffer, mimeType = "audio/ogg") {
     try {
-        const model = genAI.getGenerativeModel(
-            { model: "gemini-3-flash-preview" },
-            { apiVersion: "v1beta" }
-        );
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
         const generatePromise = model.generateContent([
             prompt,
@@ -1644,10 +1650,7 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
             // If text, generateContent(prompt + text).
             // If voice buffer, generateContent([prompt, inlineData]).
 
-            const model = genAI.getGenerativeModel(
-                { model: "gemini-3-flash-preview" },
-                { apiVersion: "v1beta" }
-            );
+            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
             if (type === 'text') {
                 result = await model.generateContent(prompt + "\nUser Input: " + input);
