@@ -53,7 +53,7 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Helper: Generate Content (Single Key)
-async function generateContentWithRotation(prompt, buffer) {
+async function generateContentWithRotation(prompt, buffer, mimeType = "audio/ogg") {
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" }); // Using standard flash model
 
@@ -61,7 +61,7 @@ async function generateContentWithRotation(prompt, buffer) {
             prompt,
             {
                 inlineData: {
-                    mimeType: "audio/ogg",
+                    mimeType: mimeType,
                     data: buffer.toString('base64')
                 }
             }
@@ -1950,7 +1950,7 @@ bot.on('photo', async (ctx) => {
 
         let result;
         try {
-            result = await generateContentWithRotation(prompt, buffer);
+            result = await generateContentWithRotation(prompt, buffer, "image/jpeg");
 
         } catch (error) {
             console.error("AI Photo Error:", error);
