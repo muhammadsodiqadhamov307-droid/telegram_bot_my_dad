@@ -10,6 +10,7 @@ import fs from 'fs';
 import { openDb, initDb } from './database.js'; // Import initDb
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
+import axios from 'axios';
 
 // Load environment variables
 dotenv.config();
@@ -70,11 +71,15 @@ async function generateContentWithRotation(prompt, buffer, mimeType = "audio/ogg
             }
         ]);
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 60000) // 60s timeout
-        );
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 60000);
+        });
 
-        return await Promise.race([generatePromise, timeoutPromise]);
+        const result = await Promise.race([generatePromise, timeoutPromise]);
+        clearTimeout(timeoutId); // Prevent unhandled rejection later
+
+        return result;
 
     } catch (error) {
         console.error("Gemini API Error:", error);
@@ -1927,10 +1932,9 @@ bot.on('photo', async (ctx) => {
 
         const processingMsg = await ctx.reply("📸 Chek tahlil qilinmoqda...");
 
-        // Download image
-        const response = await fetch(fileLink.href);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        // Download image using Axios to guarantee safe Node Buffers
+        const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+        const buffer = Buffer.from(response.data);
 
         // Gemini Prompt for Receipts
         const prompt = `
