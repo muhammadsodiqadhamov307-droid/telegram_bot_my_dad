@@ -65,7 +65,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Helper: Generate Content (Single Key)
 async function generateContentWithRotation(prompt, buffer, mimeType = "audio/ogg") {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        const model = genAI.getGenerativeModel(
+            { model: "gemini-3-flash-preview" },
+            { apiVersion: "v1beta" }
+        );
 
         const generatePromise = model.generateContent([
             prompt,
@@ -1650,7 +1653,10 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
             // If text, generateContent(prompt + text).
             // If voice buffer, generateContent([prompt, inlineData]).
 
-            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+            const model = genAI.getGenerativeModel(
+                { model: "gemini-3-flash-preview" },
+                { apiVersion: "v1beta" }
+            );
 
             if (type === 'text') {
                 result = await model.generateContent(prompt + "\nUser Input: " + input);
