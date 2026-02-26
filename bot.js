@@ -395,6 +395,7 @@ bot.action('select_all', async (ctx) => {
 // Create Project Flow
 const creatingProjectUsers = new Set();
 const salaryModeUsers = new Set();
+const customDateUsers = new Set(); // Added for custom date tracking
 
 
 bot.hears('👷 Ustalar Oyligi', async (ctx) => {
@@ -554,7 +555,33 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
+    // Custom Date Report Logic
+    if (customDateUsers.has(userId)) {
+        customDateUsers.delete(userId);
+        if (text.startsWith('/')) return next();
 
+        // Expected format: YYYY-MM-DD YYYY-MM-DD or YYYY-MM-DD
+        const dates = text.split(/\s+/);
+        let startD, endD;
+
+        if (dates.length >= 2) {
+            startD = dates[0].trim();
+            endD = dates[1].trim();
+        } else if (dates.length === 1) {
+            startD = dates[0].trim();
+            endD = dates[0].trim();
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startD) || !dateRegex.test(endD)) {
+            await ctx.reply("❌ Xato format. Sana YYYY-MM-DD shaklida bo'lishi kerak.\nMasalan: 2024-01-01 2024-01-31");
+            return;
+        }
+
+        const period = `custom_${startD}_${endD}`;
+        await sendReportSummary(ctx, period, false);
+        return;
+    }
 
     return next();
 });
@@ -589,6 +616,9 @@ async function showReportsMenu(ctx, isEdit = false) {
             [
                 { text: '🗓 Shu hafta', callback_data: 'report_week' },
                 { text: '📆 Shu oy', callback_data: 'report_month' }
+            ],
+            [
+                { text: '🗓 Boshqa sana', callback_data: 'report_custom_date' }
             ],
             [
                 { text: '🔙 Orqaga', callback_data: 'main_menu' },
@@ -634,6 +664,19 @@ bot.action('report_week', (ctx) => sendReportSummary(ctx, 'week', true));
 bot.hears('📆 Shu oy', (ctx) => sendReportSummary(ctx, 'month'));
 bot.action('report_month', (ctx) => sendReportSummary(ctx, 'month', true));
 
+bot.action('report_custom_date', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => { });
+    customDateUsers.add(ctx.from.id);
+    await ctx.reply("🗓 **Boshqa sana:**\n\nQaysi sanalar oralig'idagi hisobot kerak?\nKerakli sanani yoki sanalar oralig'ini kiriting.\n__Format: YYYY-MM-DD YYYY-MM-DD__\n_Masalan: 2024-01-01 2024-01-31_", {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🔙 Bekor qilish", callback_data: 'reports_menu' }]
+            ]
+        }
+    });
+});
+
 async function sendReportSummary(ctx, period, isEdit = false) {
     try {
         const userId = ctx.from.id;
@@ -642,14 +685,15 @@ async function sendReportSummary(ctx, period, isEdit = false) {
         if (!user) return ctx.reply("Iltimos, avval /start ni bosing.");
 
         const data = await getReportData(db, user.id, period, user.current_project_id);
-        const { rows, totalInc, totalExp, periodName, projectName, isHammasi, isProject } = data;
+        const { rows, totalInc, totalExp, periodName, projectName, isHammasi, isProject, startingBalance } = data;
 
-        if (rows.length === 0) {
+        if (rows.length === 0 && startingBalance === 0) {
             await ctx.reply(`⚠️ **${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`, { parse_mode: 'Markdown' });
             return showMainMenu(ctx);
         }
 
-        let message = `📊 **${projectName}**\n${periodName} Hisobot\n\n`;
+        let message = `📊 **${projectName}**\n${periodName} Hisobot\n`;
+        message += `\n🔄 **Kun boshidagi qoldiq:** ${startingBalance.toLocaleString()} so'm\n\n`;
 
         // Fetch Salary Category for Comparison
         const salaryCat = await ensureSalaryCategory(userId);
@@ -712,10 +756,12 @@ async function sendReportSummary(ctx, period, isEdit = false) {
             });
 
             const balance = totalInc - totalExp;
+            const closingBalance = startingBalance + balance;
             message += `\n💰 **JAMI BALANS:**\n` +
                 `🟢 Kirim: +${totalInc.toLocaleString()}\n` +
                 `🔴 Chiqim: -${totalExp.toLocaleString()}\n` +
-                `💵 Qoldiq: ${balance.toLocaleString()} so'm`;
+                `💵 Davr qoldig'i: ${balance.toLocaleString()} so'm\n\n` +
+                `🏁 **Kun oxiridagi qoldiq:** ${closingBalance.toLocaleString()} so'm`;
 
         } else {
             // PROJECT & BOSHQA RENDERER (Expenses Only)
@@ -736,8 +782,10 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                 });
             }
 
+            const closingBalance = startingBalance - totalExp;
             message += `\n────────────────\n` +
-                ` Jami Chiqim: -${totalExp.toLocaleString()} so'm`;
+                ` Jami Chiqim: -${totalExp.toLocaleString()} so'm\n\n` +
+                `🏁 **Kun oxiridagi qoldiq:** ${closingBalance.toLocaleString()} so'm`;
         }
 
         const keyboard = {
@@ -888,7 +936,18 @@ async function generateExcelReport(ctx, period) {
         }
 
         // --- DATA RENDERING ---
-        let currentRow = 10;
+        let currentRow = 9;
+
+        // Opening Balance explicitly at the top
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).value = "🔄 KUN BOSHIDAGI QOLDIQ:";
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        worksheet.getCell(`A${currentRow}`).alignment = { horizontal: 'right' };
+        worksheet.getCell(`E${currentRow}`).value = `${startingBalance.toLocaleString()} so'm`;
+        worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FF3b82f6' } };
+        worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
+
+        currentRow += 2;
 
         if (isHammasi) {
             // 1. Incomes Section
@@ -1135,22 +1194,31 @@ async function generateExcelReport(ctx, period) {
                 worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
                 worksheet.getCell(`D${currentRow}`).value = `-${totalSalaries.toLocaleString()}`;
                 worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFd97706' } };
-                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
                 currentRow++;
+                // Section Total
+                worksheet.getCell(`C${currentRow}`).value = `Jami Chiqim:`;
+                worksheet.getCell(`C${currentRow}`).font = { bold: true };
+                worksheet.getCell(`C${currentRow}`).alignment = { horizontal: 'right' };
+                worksheet.getCell(`D${currentRow}`).value = `-${totalExp.toLocaleString()}`;
+                worksheet.getCell(`D${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+                worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
+                currentRow += 2;
             }
 
-            currentRow++;
-            worksheet.getCell(`D${currentRow}`).value = 'Jami Chiqim:';
-            worksheet.getCell(`D${currentRow}`).font = { bold: true };
-            worksheet.getCell(`D${currentRow}`).alignment = { horizontal: 'right' };
-            worksheet.getCell(`E${currentRow}`).value = `-${totalExp.toLocaleString()} so'm`;
-            worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: 'FFdc2626' } };
+            // Closing Balance explicitly at the bottom
+            const closingBalance = startingBalance + totalInc - totalExp;
+            worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+            worksheet.getCell(`A${currentRow}`).value = "🏁 KUN OXIRIDAGI QOLDIQ:";
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).alignment = { horizontal: 'right' };
+            worksheet.getCell(`E${currentRow}`).value = `${closingBalance.toLocaleString()} so'm`;
+            worksheet.getCell(`E${currentRow}`).font = { bold: true, size: 12, color: { argb: 'FF3b82f6' } };
             worksheet.getCell(`E${currentRow}`).alignment = { horizontal: 'right' };
-        }
 
-        const buffer = await workbook.xlsx.writeBuffer();
-        await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
-        await showMainMenu(ctx, true);
+            const buffer = await workbook.xlsx.writeBuffer();
+            await ctx.replyWithDocument({ source: Buffer.from(buffer), filename: `Hisobot_${period}.xlsx` });
+            await showMainMenu(ctx, true);
+        }
 
     } catch (e) {
         console.error("Excel Error:", e);
@@ -1227,6 +1295,22 @@ async function getReportData(db, userId, period, projectId = null) {
         periodName = "Oylik";
         startDate = monthStart;
         endDate = todayStr;
+    } else if (period && period.startsWith('custom_')) {
+        const parts = period.split('_');
+        if (parts.length === 3) {
+            startDate = parts[1];
+            endDate = parts[2];
+            dateFilter = `date(created_at, '+05:00') >= '${startDate}' AND date(created_at, '+05:00') <= '${endDate}'`;
+            startQueryFilter = `date(created_at, '+05:00') < '${startDate}'`;
+            periodName = `${startDate} dan ${endDate} gacha`;
+        } else {
+            // Fallback if formatting is wrong
+            dateFilter = `date(created_at, '+05:00') = '${todayStr}'`;
+            startQueryFilter = `date(created_at, '+05:00') < '${todayStr}'`;
+            periodName = "Bugungi";
+            startDate = todayStr;
+            endDate = todayStr;
+        }
     }
 
     let rows = [];
@@ -1251,17 +1335,25 @@ async function getReportData(db, userId, period, projectId = null) {
     let totalExp = 0;
     rows.forEach(r => r.type === 'income' ? totalInc += r.amount : totalExp += r.amount);
 
-    // Starting Balance Logic (Only relevant for Hammasi)
+    // Starting Balance Logic (relevant for all scopes now)
     let startingBalance = 0;
     if (isHammasi) {
-        // Only Hammasi (Global Income - Global Expenses) ?? 
-        // Or All Income - All Expenses?
-        // Hammasi View shows Global Income. Boshqa View shows Global Expenses. 
-        // Balance calculation needs to be consistent. 
-        // If Hammasi view is "All my money", it should be Total Income (Global) - Total Expenses (Global + Projects).
-
-        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND ${startQueryFilter}`; // All income (assuming forced global)
-        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND ${startQueryFilter}`; // All expenses
+        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND ${startQueryFilter}`;
+        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND ${startQueryFilter}`;
+        const startInc = await db.get(startIncQuery, userId);
+        const startExp = await db.get(startExpQuery, userId);
+        startingBalance = (startInc.total || 0) - (startExp.total || 0);
+    } else if (isProject) {
+        // Project balance (currently relies on expense, typically income to project isn't fully separate here but checking)
+        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND project_id = ? AND ${startQueryFilter}`;
+        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND project_id = ? AND ${startQueryFilter}`;
+        const startInc = await db.get(startIncQuery, userId, projectId);
+        const startExp = await db.get(startExpQuery, userId, projectId);
+        startingBalance = (startInc.total || 0) - (startExp.total || 0);
+    } else {
+        // Global / null project
+        const startIncQuery = `SELECT SUM(amount) as total FROM income WHERE user_id = ? AND project_id IS NULL AND ${startQueryFilter}`;
+        const startExpQuery = `SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND project_id IS NULL AND ${startQueryFilter}`;
         const startInc = await db.get(startIncQuery, userId);
         const startExp = await db.get(startExpQuery, userId);
         startingBalance = (startInc.total || 0) - (startExp.total || 0);
