@@ -1950,12 +1950,7 @@ bot.on('photo', async (ctx) => {
 
         let result;
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-            result = await model.generateContent([
-                prompt,
-                { inlineData: { mimeType: "image/jpeg", data: buffer.toString('base64') } }
-            ]);
+            result = await generateContentWithRotation(prompt, buffer);
 
         } catch (error) {
             console.error("AI Photo Error:", error);
