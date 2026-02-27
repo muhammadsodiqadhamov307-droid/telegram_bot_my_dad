@@ -199,7 +199,7 @@ async function showMainMenu(ctx, isEdit = false) {
         currentContextName = "📂 Boshqa xarajatlar";
     }
 
-    const text = `Salom ${user.first_name}!\n\n📂 **Hozirgi Obyekt:** ${currentContextName}\n\n👇 Obyektni tanlang yoki hisobotlarni ko'ring:`;
+    const text = `Salom ${user.first_name}!\n\n📂 *Hozirgi Obyekt:* ${currentContextName}\n\n👇 Obyektni tanlang yoki hisobotlarni ko'ring:`;
 
     // Build Inline Keyboard
     const inlineKeyboard = [];
@@ -277,8 +277,8 @@ async function showMainMenu(ctx, isEdit = false) {
             return; // Ignore harmless error
         }
         console.error("Menu Error:", e);
-        // Fallback
-        await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+        // Fallback without parse_mode safely
+        await ctx.reply(text.replace(/\*/g, ''), { reply_markup: keyboard }).catch(err => console.error("Fallback threw:", err));
     }
 }
 
@@ -417,7 +417,7 @@ const customDateUsers = new Set(); // Added for custom date tracking
 
 bot.hears('👷 Ustalar Oyligi', async (ctx) => {
     salaryModeUsers.add(ctx.from.id);
-    await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
+    await ctx.reply("👷 *Ustalar Oyligi*\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
@@ -430,7 +430,7 @@ bot.hears('👷 Ustalar Oyligi', async (ctx) => {
 bot.action('salary_mode_start', async (ctx) => {
     await ctx.answerCbQuery().catch(() => { }); // Answer first!
     salaryModeUsers.add(ctx.from.id);
-    await ctx.reply("👷 **Ustalar Oyligi**\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
+    await ctx.reply("👷 *Ustalar Oyligi*\n\nKimga va qancha oylik berildi?\nOvozli xabar yoki yozma shaklda yuboring.\n_Masalan: Ali 100, Vali 200..._", {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
@@ -501,7 +501,7 @@ bot.action(/confirm_delete_project_(.+)/, async (ctx) => {
     }
 
     // Confirmation Dialog
-    await ctx.editMessageText(`⚠️ **${project.name}** o'chirilmoqda!\n\nUnga bog'liq barcha kirim-chiqimlar ham o'chib ketadi. Tasdiqlaysizmi?`, {
+    await ctx.editMessageText(`⚠️ *${project.name}* o'chirilmoqda!\n\nUnga bog'liq barcha kirim-chiqimlar ham o'chib ketadi. Tasdiqlaysizmi?`, {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
@@ -623,7 +623,7 @@ async function showReportsMenu(ctx, isEdit = false) {
         if (p) contextTitle = `🏗 ${p.name}`;
     }
 
-    const text = `📅 **${contextTitle}** uchun hisobot davrini tanlang:`;
+    const text = `📅 *${contextTitle}* uchun hisobot davrini tanlang:`;
     const keyboard = {
         inline_keyboard: [
             [
@@ -684,7 +684,7 @@ bot.action('report_month', (ctx) => sendReportSummary(ctx, 'month', true));
 bot.action('report_custom_date', async (ctx) => {
     await ctx.answerCbQuery().catch(() => { });
     customDateUsers.add(ctx.from.id);
-    await ctx.reply("🗓 **Boshqa sana:**\n\nQaysi sanalar oralig'idagi hisobot kerak?\nKerakli sanani yoki sanalar oralig'ini kiriting.\n__Format: YYYY-MM-DD YYYY-MM-DD__\n_Masalan: 2024-01-01 2024-01-31_", {
+    await ctx.reply("🗓 *Boshqa sana:*\n\nQaysi sanalar oralig'idagi hisobot kerak?\nKerakli sanani yoki sanalar oralig'ini kiriting.\n__Format: YYYY-MM-DD YYYY-MM-DD__\n_Masalan: 2024-01-01 2024-01-31_", {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
@@ -705,12 +705,12 @@ async function sendReportSummary(ctx, period, isEdit = false) {
         const { rows, totalInc, totalExp, periodName, projectName, isHammasi, isProject, startingBalance } = data;
 
         if (rows.length === 0 && startingBalance === 0) {
-            await ctx.reply(`⚠️ **${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`, { parse_mode: 'Markdown' });
+            await ctx.reply(`⚠️ *${projectName}*\n${periodName} hisobot uchun ma'lumot topilmadi.`, { parse_mode: 'Markdown' });
             return showMainMenu(ctx);
         }
 
-        let message = `📊 **${projectName}**\n${periodName} Hisobot\n`;
-        message += `\n🔄 **Kun boshidagi qoldiq:** ${startingBalance.toLocaleString()} so'm\n\n`;
+        let message = `📊 *${projectName}*\n${periodName} Hisobot\n`;
+        message += `\n🔄 *Kun boshidagi qoldiq:* ${startingBalance.toLocaleString()} so'm\n\n`;
 
         // Fetch Salary Category for Comparison
         const salaryCat = await ensureSalaryCategory(userId);
@@ -719,7 +719,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
             // HAMMASI RENDERER
             const Incomes = rows.filter(r => r.type === 'income');
             if (Incomes.length > 0) {
-                message += `📥 **KIRIMLAR:**\n`;
+                message += `📥 *KIRIMLAR:*\n`;
                 Incomes.forEach(r => message += `🟢 ${r.description}: +${r.amount.toLocaleString()}\n`);
                 message += `\n------------------------------------------------\n`;
             }
@@ -746,7 +746,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
 
             sortedPids.forEach(pid => {
                 const pName = projectMap[pid] || "Noma'lum";
-                message += `🏗 **${pName}**:\n`;
+                message += `🏗 *${pName}*:\n`;
                 let pTotal = 0;
 
                 const pExpenses = tasksByProject[pid];
@@ -761,7 +761,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
                 }
 
                 if (pSalaries.length > 0) {
-                    message += `   👷 **Ustalar Oyligi:**\n`;
+                    message += `   👷 *Ustalar Oyligi:*\n`;
                     pSalaries.forEach(r => {
                         message += `   🔸 ${r.description}: -${r.amount.toLocaleString()}\n`;
                         pTotal += r.amount;
@@ -774,11 +774,11 @@ async function sendReportSummary(ctx, period, isEdit = false) {
 
             const balance = totalInc - totalExp;
             const closingBalance = startingBalance + balance;
-            message += `\n💰 **JAMI BALANS:**\n` +
+            message += `\n💰 *JAMI BALANS:*\n` +
                 `🟢 Kirim: +${totalInc.toLocaleString()}\n` +
                 `🔴 Chiqim: -${totalExp.toLocaleString()}\n` +
                 `💵 Davr qoldig'i: ${balance.toLocaleString()} so'm\n\n` +
-                `🏁 **Kun oxiridagi qoldiq:** ${closingBalance.toLocaleString()} so'm`;
+                `🏁 *Kun oxiridagi qoldiq:* ${closingBalance.toLocaleString()} so'm`;
 
         } else {
             // PROJECT & BOSHQA RENDERER (Expenses Only)
@@ -786,14 +786,14 @@ async function sendReportSummary(ctx, period, isEdit = false) {
             const regular = rows.filter(r => r.category_id !== salaryCat.id);
 
             if (regular.length > 0) {
-                message += `🛠 **Xarajatlar:**\n`;
+                message += `🛠 *Xarajatlar:*\n`;
                 regular.forEach(r => {
                     message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`;
                 });
             }
 
             if (salaries.length > 0) {
-                message += `\n👷 **Ustalar Oyligi:**\n`;
+                message += `\n👷 *Ustalar Oyligi:*\n`;
                 salaries.forEach(r => {
                     message += `� ${r.description}: -${r.amount.toLocaleString()}\n`;
                 });
@@ -802,7 +802,7 @@ async function sendReportSummary(ctx, period, isEdit = false) {
             const closingBalance = startingBalance - totalExp;
             message += `\n────────────────\n` +
                 ` Jami Chiqim: -${totalExp.toLocaleString()} so'm\n\n` +
-                `🏁 **Kun oxiridagi qoldiq:** ${closingBalance.toLocaleString()} so'm`;
+                `🏁 *Kun oxiridagi qoldiq:* ${closingBalance.toLocaleString()} so'm`;
         }
 
         const keyboard = {
@@ -1687,13 +1687,13 @@ async function processSalaryInput(ctx, input, type, existingMsg = null) {
 
         pendingTransactions.set(ctx.from.id, data);
 
-        let msg = "👷 **Oylik To'lovlarni Tasdiqlang:**\n\n";
+        let msg = "👷 *Oylik To'lovlarni Tasdiqlang:*\n\n";
         let total = 0;
         data.forEach((item, index) => {
             msg += `${index + 1}. ${item.description}: ${item.amount.toLocaleString()} so'm\n`;
             total += item.amount;
         });
-        msg += `\n**JAMI:** ${total.toLocaleString()} so'm`;
+        msg += `\n*JAMI:* ${total.toLocaleString()} so'm`;
 
         await ctx.telegram.deleteMessage(ctx.chat.id, waitingMsg.message_id);
 
@@ -1909,7 +1909,7 @@ bot.on('voice', async (ctx) => {
             }
 
             await ctx.reply(
-                `✅ **Saqlandi!**\n🏗️ Obyekt: ${projectName}\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
+                `✅ *Saqlandi!*\n🏗️ Obyekt: ${projectName}\n\n${icon} *${typeLabel}:* ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
                 {
                     parse_mode: 'Markdown',
                     reply_markup: {
@@ -2052,7 +2052,7 @@ bot.on('photo', async (ctx) => {
             }
 
             await ctx.reply(
-                `✅ **Saqlandi!**\n🏗️ Obyekt: ${projectName}\n\n${icon} **${typeLabel}:** ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
+                `✅ *Saqlandi!*\n🏗️ Obyekt: ${projectName}\n\n${icon} *${typeLabel}:* ${txn.description} - ${txn.amount.toLocaleString()} so'm`,
                 {
                     parse_mode: 'Markdown',
                     reply_markup: {
@@ -2117,7 +2117,7 @@ bot.command('admin', async (ctx) => {
 
     buttons.push([{ text: '❌ Yopish', callback_data: 'delete_message' }]);
 
-    ctx.reply("👥 **Foydalanuvchilar Ro'yxati:**\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
+    ctx.reply("👥 *Foydalanuvchilar Ro'yxati:*\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: buttons }
     });
@@ -2144,9 +2144,9 @@ bot.action(/admin_view_user_(.+)/, async (ctx) => {
 
     const projectCount = await db.get("SELECT COUNT(*) as count FROM projects WHERE user_id = ?", user.id);
 
-    const text = `👤 **Foydalanuvchi:** ${user.first_name || 'Foydalanuvchi'} (@${user.username || 'no_user'})\n` +
-        `📍 **Hozirgi holat:** ${contextTitle}\n` +
-        `💰 **Jami Obyektlar:** ${projectCount.count} ta\n\n` +
+    const text = `👤 *Foydalanuvchi:* ${user.first_name || 'Foydalanuvchi'} (@${user.username || 'no_user'})\n` +
+        `📍 *Hozirgi holat:* ${contextTitle}\n` +
+        `💰 *Jami Obyektlar:* ${projectCount.count} ta\n\n` +
         `Qaysi davr uchun hisobot kerak?`;
 
     const keyboard = {
@@ -2194,7 +2194,7 @@ bot.action('admin_dashboard', async (ctx) => {
         userButtons.push([{ text: '🔙 Orqaga', callback_data: 'close_admin' }]);
 
         await ctx.editMessageText(
-            "👑 **Admin Panel**\n\n👥 **Barcha foydalanuvchilar:**\nFoydalanuvchini tanlang:",
+            "👑 *Admin Panel*\n\n👥 *Barcha foydalanuvchilar:*\nFoydalanuvchini tanlang:",
             {
                 parse_mode: 'Markdown',
                 reply_markup: { inline_keyboard: userButtons }
@@ -2223,7 +2223,7 @@ bot.action('admin_list_users', async (ctx) => {
     }]));
     buttons.push([{ text: '❌ Yopish', callback_data: 'delete_message' }]);
 
-    await ctx.editMessageText("👥 **Foydalanuvchilar Ro'yxati:**\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
+    await ctx.editMessageText("👥 *Foydalanuvchilar Ro'yxati:*\nHisobotini ko'rmoqchi bo'lgan foydalanuvchini tanlang:", {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: buttons }
     });
@@ -2250,7 +2250,7 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         const { rows, totalInc, totalExp, periodName, projectName, isHammasi } = data;
 
         if (rows.length === 0) {
-            const msg = `⚠️ **${user.first_name || 'Foydalanuvchi'}** - **${projectName}**\n${periodName} hisobot uchun ma'lumot topilmadi.`;
+            const msg = `⚠️ *${user.first_name || 'Foydalanuvchi'}* - *${projectName}*\n${periodName} hisobot uchun ma'lumot topilmadi.`;
             const keyboard = {
                 inline_keyboard: [
                     [
@@ -2263,7 +2263,7 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
             return ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: keyboard });
         }
 
-        let message = `👮‍♂️ **ADMIN VIEW**\n👤 **${user.first_name || 'Foydalanuvchi'}** | 🏗 **${projectName}**\n🗓 **${periodName} Hisobot**\n\n`;
+        let message = `👮‍♂️ *ADMIN VIEW*\n👤 *${user.first_name || 'Foydalanuvchi'}* | 🏗 *${projectName}*\n🗓 *${periodName} Hisobot*\n\n`;
 
         const salaryCat = await ensureSalaryCategory(user.telegram_id); // Pass telegram_id as expected by ensureSalaryCategory
 
@@ -2271,7 +2271,7 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
         if (isHammasi) {
             const Incomes = rows.filter(r => r.type === 'income');
             if (Incomes.length > 0) {
-                message += `📥 **KIRIMLAR:**\n`;
+                message += `📥 *KIRIMLAR:*\n`;
                 Incomes.forEach(r => message += `🟢 ${r.description}: +${r.amount.toLocaleString()}\n`);
                 message += `\n----------------\n`;
             }
@@ -2290,7 +2290,7 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
 
             Object.keys(tasksByProject).forEach(pid => {
                 const pName = projectMap[pid] || "Noma'lum";
-                message += `🏗 **${pName}**:\n`;
+                message += `🏗 *${pName}*:\n`;
                 let pTotal = 0;
                 const pExpenses = tasksByProject[pid];
                 const pSalaries = pExpenses.filter(r => r.category_id === salaryCat.id);
@@ -2298,14 +2298,14 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
 
                 if (pRegular.length > 0) pRegular.forEach(r => { message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`; pTotal += r.amount; });
                 if (pSalaries.length > 0) {
-                    message += `   👷 **Ustalar:**\n`;
+                    message += `   👷 *Ustalar:*\n`;
                     pSalaries.forEach(r => { message += `   🔸 ${r.description}: -${r.amount.toLocaleString()}\n`; pTotal += r.amount; });
                 }
                 message += `   Jami: -${pTotal.toLocaleString()}\n----------------\n`;
             });
 
             const balance = totalInc - totalExp;
-            message += `\n💰 **JAMI BALANS:**\n🟢 +${totalInc.toLocaleString()}\n🔴 -${totalExp.toLocaleString()}\n💵 **${balance.toLocaleString()}**`;
+            message += `\n💰 *JAMI BALANS:*\n🟢 +${totalInc.toLocaleString()}\n🔴 -${totalExp.toLocaleString()}\n💵 *${balance.toLocaleString()}*`;
 
         } else {
             // Project/Global View
@@ -2313,11 +2313,11 @@ async function sendAdminReportSummary(ctx, period, targetUserId, isEdit = false)
             const regular = rows.filter(r => r.category_id !== salaryCat.id);
 
             if (regular.length > 0) {
-                message += `🛠 **Xarajatlar:**\n`;
+                message += `🛠 *Xarajatlar:*\n`;
                 regular.forEach(r => message += `🔴 ${r.description}: -${r.amount.toLocaleString()}\n`);
             }
             if (salaries.length > 0) {
-                message += `\n👷 **Ustalar:**\n`;
+                message += `\n👷 *Ustalar:*\n`;
                 salaries.forEach(r => message += `🔸 ${r.description}: -${r.amount.toLocaleString()}\n`);
             }
             message += `\n────────────────\nJami Chiqim: -${totalExp.toLocaleString()} so'm`;
